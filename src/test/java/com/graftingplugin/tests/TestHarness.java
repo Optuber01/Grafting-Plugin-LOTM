@@ -9,7 +9,8 @@ public final class TestHarness {
         run("SubjectResolverTest", SubjectResolverTest::run);
         run("GraftCompatibilityValidatorTest", GraftCompatibilityValidatorTest::run);
         run("StateTransferPlannerTest", StateTransferPlannerTest::run);
-        System.out.println("All milestone-3 tests passed.");
+        run("RelationGraftPlannerTest", RelationGraftPlannerTest::run);
+        System.out.println("All milestone-4 tests passed.");
     }
 
     private static void run(String name, Runnable test) {

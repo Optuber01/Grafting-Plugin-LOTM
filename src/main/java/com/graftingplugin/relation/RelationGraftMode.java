@@ -1,0 +1,10 @@
+package com.graftingplugin.relation;
+
+public enum RelationGraftMode {
+    MOB_AGGRO,
+    PROJECTILE_RETARGET_ENTITY,
+    PROJECTILE_RETARGET_LOCATION,
+    CONTAINER_ROUTE,
+    TETHER_ENTITY,
+    TETHER_LOCATION
+}

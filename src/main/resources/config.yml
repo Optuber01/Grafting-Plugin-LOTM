@@ -11,6 +11,17 @@ state-transfer:
   heat-damage: 1.0
   heal-amount: 4.0
   bounce-count: 3
+relation-graft:
+  aggro-duration-seconds: 15
+  aggro-refresh-ticks: 10
+  projectile-duration-seconds: 10
+  projectile-refresh-ticks: 2
+  projectile-turn-strength: 0.35
+  container-duration-seconds: 20
+  tether-duration-seconds: 12
+  tether-refresh-ticks: 2
+  tether-strength: 0.18
+  tether-slack-distance: 2.0
 concepts:
   sun:
     name: Sun

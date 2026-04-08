@@ -7,6 +7,7 @@ public final class CastSession {
 
     private GraftFamily family = GraftFamily.STATE;
     private GraftSubject source;
+    private CastSourceReference sourceReference = CastSourceReference.none();
     private GraftAspect selectedAspect;
 
     public GraftFamily family() {
@@ -21,9 +22,14 @@ public final class CastSession {
         return source;
     }
 
-    public void setSource(GraftSubject source) {
+    public void setSource(GraftSubject source, CastSourceReference sourceReference) {
         this.source = source;
+        this.sourceReference = sourceReference;
         this.selectedAspect = null;
+    }
+
+    public CastSourceReference sourceReference() {
+        return sourceReference;
     }
 
     public GraftAspect selectedAspect() {
@@ -40,6 +46,7 @@ public final class CastSession {
 
     public void clearSelection() {
         this.source = null;
+        this.sourceReference = CastSourceReference.none();
         this.selectedAspect = null;
     }
 }

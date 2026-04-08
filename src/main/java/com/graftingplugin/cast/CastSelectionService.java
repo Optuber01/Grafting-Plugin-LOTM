@@ -17,6 +17,10 @@ public final class CastSelectionService {
     }
 
     public boolean armSource(Player player, GraftSubject source) {
+        return armSource(player, source, CastSourceReference.none());
+    }
+
+    public boolean armSource(Player player, GraftSubject source, CastSourceReference sourceReference) {
         CastSession session = plugin.castSessionManager().session(player.getUniqueId());
         List<GraftAspect> compatibleAspects = plugin.compatibilityValidator().compatibleSourceAspects(session.family(), source);
         if (compatibleAspects.isEmpty()) {
@@ -27,7 +31,7 @@ public final class CastSelectionService {
             return false;
         }
 
-        session.setSource(source);
+        session.setSource(source, sourceReference);
         if (compatibleAspects.size() == 1) {
             GraftAspect selectedAspect = compatibleAspects.getFirst();
             session.setSelectedAspect(selectedAspect);

@@ -2,6 +2,7 @@ package com.graftingplugin.focus;
 
 import com.graftingplugin.GraftingPlugin;
 import com.graftingplugin.aspect.GraftAspect;
+import com.graftingplugin.cast.CastSourceReference;
 import com.graftingplugin.cast.CastSession;
 import com.graftingplugin.cast.GraftFamily;
 import com.graftingplugin.subject.GraftSubject;
@@ -48,8 +49,8 @@ public final class FocusInteractionListener implements Listener {
             return;
         }
         if (action == Action.RIGHT_CLICK_AIR || action == Action.RIGHT_CLICK_BLOCK) {
-            if (readyForStateTransfer(player)) {
-                applyStateTransfer(player, event.getClickedBlock(), null);
+            if (readyForCast(player)) {
+                applyCast(player, event.getClickedBlock(), null);
             } else {
                 selectSource(player, event.getClickedBlock(), null);
             }
@@ -68,28 +69,24 @@ public final class FocusInteractionListener implements Listener {
         }
 
         event.setCancelled(true);
-        if (readyForStateTransfer(player)) {
-            applyStateTransfer(player, null, event.getRightClicked());
+        if (readyForCast(player)) {
+            applyCast(player, null, event.getRightClicked());
         } else {
             selectSource(player, null, event.getRightClicked());
         }
     }
 
     private void selectSource(Player player, Block clickedBlock, Entity clickedEntity) {
-        GraftSubject source = resolveConcreteSource(player, clickedBlock, clickedEntity);
+        ResolvedSource source = resolveConcreteSource(player, clickedBlock, clickedEntity);
         if (source == null) {
             plugin.messages().send(player, "no-source-found");
             return;
         }
-        plugin.castSelectionService().armSource(player, source);
+        plugin.castSelectionService().armSource(player, source.subject(), source.reference());
     }
 
-    private void applyStateTransfer(Player player, Block clickedBlock, Entity clickedEntity) {
+    private void applyCast(Player player, Block clickedBlock, Entity clickedEntity) {
         CastSession session = plugin.castSessionManager().session(player.getUniqueId());
-        if (session.family() != GraftFamily.STATE) {
-            plugin.messages().send(player, "family-runtime-pending", "family", session.family().displayName());
-            return;
-        }
         if (session.source() == null) {
             plugin.messages().send(player, "no-source-selected");
             return;
@@ -99,6 +96,15 @@ public final class FocusInteractionListener implements Listener {
             return;
         }
 
+        switch (session.family()) {
+            case STATE -> applyStateTransfer(player, clickedBlock, clickedEntity);
+            case RELATION -> applyRelationGraft(player, clickedBlock, clickedEntity);
+            default -> plugin.messages().send(player, "family-runtime-pending", "family", session.family().displayName());
+        }
+    }
+
+    private void applyStateTransfer(Player player, Block clickedBlock, Entity clickedEntity) {
+        CastSession session = plugin.castSessionManager().session(player.getUniqueId());
         if (player.isSneaking()) {
             Location center = resolveAreaCenter(player, clickedBlock, clickedEntity);
             if (center == null) {
@@ -138,25 +144,55 @@ public final class FocusInteractionListener implements Listener {
         plugin.stateTransferService().applyToBlock(player, session.source(), session.selectedAspect(), focusTarget.block());
     }
 
-    private GraftSubject resolveConcreteSource(Player player, Block clickedBlock, Entity clickedEntity) {
-        if (clickedEntity instanceof Projectile projectile) {
-            return plugin.subjectResolver().resolveProjectile(projectile).orElse(null);
-        }
+    private void applyRelationGraft(Player player, Block clickedBlock, Entity clickedEntity) {
+        CastSession session = plugin.castSessionManager().session(player.getUniqueId());
         if (clickedEntity != null) {
-            return plugin.subjectResolver().resolveEntity(clickedEntity).orElse(null);
+            plugin.relationGraftService().applyToEntity(player, session.source(), session.sourceReference(), session.selectedAspect(), clickedEntity);
+            return;
         }
         if (clickedBlock != null) {
-            return plugin.subjectResolver().resolveBlock(clickedBlock).orElse(null);
+            plugin.relationGraftService().applyToBlock(player, session.source(), session.sourceReference(), session.selectedAspect(), clickedBlock);
+            return;
+        }
+
+        FocusTarget focusTarget = resolveLookTarget(player);
+        if (focusTarget == null) {
+            plugin.messages().send(player, "no-target-found");
+            return;
+        }
+        if (focusTarget.entity() != null) {
+            plugin.relationGraftService().applyToEntity(player, session.source(), session.sourceReference(), session.selectedAspect(), focusTarget.entity());
+            return;
+        }
+        plugin.relationGraftService().applyToBlock(player, session.source(), session.sourceReference(), session.selectedAspect(), focusTarget.block());
+    }
+
+    private ResolvedSource resolveConcreteSource(Player player, Block clickedBlock, Entity clickedEntity) {
+        if (clickedEntity instanceof Projectile projectile) {
+            GraftSubject subject = plugin.subjectResolver().resolveProjectile(projectile).orElse(null);
+            return subject == null ? null : new ResolvedSource(subject, CastSourceReference.ofEntity(projectile));
+        }
+        if (clickedEntity != null) {
+            GraftSubject subject = plugin.subjectResolver().resolveEntity(clickedEntity).orElse(null);
+            return subject == null ? null : new ResolvedSource(subject, CastSourceReference.ofEntity(clickedEntity));
+        }
+        if (clickedBlock != null) {
+            GraftSubject subject = plugin.subjectResolver().resolveBlock(clickedBlock).orElse(null);
+            return subject == null ? null : new ResolvedSource(subject, CastSourceReference.ofBlock(clickedBlock));
         }
 
         FocusTarget lookTarget = resolveLookTarget(player);
         if (lookTarget != null) {
-            return lookTarget.subject();
+            if (lookTarget.entity() != null) {
+                return new ResolvedSource(lookTarget.subject(), CastSourceReference.ofEntity(lookTarget.entity()));
+            }
+            return new ResolvedSource(lookTarget.subject(), CastSourceReference.ofBlock(lookTarget.block()));
         }
 
         ItemStack offhand = player.getInventory().getItemInOffHand();
         if (offhand != null && !plugin.focusItemService().isFocus(offhand)) {
-            return plugin.subjectResolver().resolveItem(offhand).orElse(null);
+            GraftSubject subject = plugin.subjectResolver().resolveItem(offhand).orElse(null);
+            return subject == null ? null : new ResolvedSource(subject, CastSourceReference.none());
         }
         return null;
     }
@@ -179,9 +215,9 @@ public final class FocusInteractionListener implements Listener {
         return lookTarget.block().getLocation().add(0.5D, 0.5D, 0.5D);
     }
 
-    private boolean readyForStateTransfer(Player player) {
+    private boolean readyForCast(Player player) {
         CastSession session = plugin.castSessionManager().session(player.getUniqueId());
-        return session.family() == GraftFamily.STATE && session.source() != null && session.selectedAspect() != null;
+        return session.source() != null && session.selectedAspect() != null;
     }
 
     private FocusTarget resolveLookTarget(Player player) {
@@ -207,5 +243,8 @@ public final class FocusInteractionListener implements Listener {
     }
 
     private record FocusTarget(GraftSubject subject, Entity entity, Block block) {
+    }
+
+    private record ResolvedSource(GraftSubject subject, CastSourceReference reference) {
     }
 }

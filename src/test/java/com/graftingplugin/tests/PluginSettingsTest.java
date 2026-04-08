@@ -21,6 +21,16 @@ public final class PluginSettingsTest {
         config.set("state-transfer.heat-damage", 2.5D);
         config.set("state-transfer.heal-amount", 6.0D);
         config.set("state-transfer.bounce-count", 4);
+        config.set("relation-graft.aggro-duration-seconds", 18);
+        config.set("relation-graft.aggro-refresh-ticks", 8);
+        config.set("relation-graft.projectile-duration-seconds", 11);
+        config.set("relation-graft.projectile-refresh-ticks", 3);
+        config.set("relation-graft.projectile-turn-strength", 0.45D);
+        config.set("relation-graft.container-duration-seconds", 22);
+        config.set("relation-graft.tether-duration-seconds", 9);
+        config.set("relation-graft.tether-refresh-ticks", 4);
+        config.set("relation-graft.tether-strength", 0.25D);
+        config.set("relation-graft.tether-slack-distance", 3.5D);
 
         PluginSettings settings = PluginSettings.fromConfig(config);
 
@@ -35,6 +45,16 @@ public final class PluginSettingsTest {
         }
         if (settings.stateTransferSettings().fieldRadius() != 5 || settings.stateTransferSettings().bounceCount() != 4) {
             throw new AssertionError("State transfer settings were not loaded correctly");
+        }
+        if (settings.relationGraftSettings().aggroDurationTicks() != 360 || settings.relationGraftSettings().containerDurationTicks() != 440) {
+            throw new AssertionError("Relation graft durations were not converted to ticks");
+        }
+        if (settings.relationGraftSettings().projectileRefreshTicks() != 3 || settings.relationGraftSettings().tetherRefreshTicks() != 4) {
+            throw new AssertionError("Relation graft tick settings were not loaded correctly");
+        }
+        if (Math.abs(settings.relationGraftSettings().projectileTurnStrength() - 0.45D) > 0.0001D
+            || Math.abs(settings.relationGraftSettings().tetherSlackDistance() - 3.5D) > 0.0001D) {
+            throw new AssertionError("Relation graft scalar settings were not loaded correctly");
         }
     }
 }

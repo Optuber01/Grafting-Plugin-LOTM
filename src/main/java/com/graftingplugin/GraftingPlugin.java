@@ -9,6 +9,8 @@ import com.graftingplugin.config.MessageService;
 import com.graftingplugin.config.PluginSettings;
 import com.graftingplugin.focus.FocusItemService;
 import com.graftingplugin.focus.FocusInteractionListener;
+import com.graftingplugin.relation.RelationGraftPlanner;
+import com.graftingplugin.relation.RelationGraftService;
 import com.graftingplugin.state.StateTransferPlanner;
 import com.graftingplugin.state.StateTransferService;
 import com.graftingplugin.subject.SubjectResolver;
@@ -29,6 +31,8 @@ public final class GraftingPlugin extends JavaPlugin {
     private CastSelectionService castSelectionService;
     private StateTransferPlanner stateTransferPlanner;
     private StateTransferService stateTransferService;
+    private RelationGraftPlanner relationGraftPlanner;
+    private RelationGraftService relationGraftService;
     private FocusInteractionListener focusInteractionListener;
 
     @Override
@@ -42,6 +46,9 @@ public final class GraftingPlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        if (relationGraftService != null) {
+            relationGraftService.shutdown();
+        }
         if (stateTransferService != null) {
             stateTransferService.shutdown();
         }
@@ -74,6 +81,12 @@ public final class GraftingPlugin extends JavaPlugin {
         if (this.stateTransferService == null) {
             this.stateTransferService = new StateTransferService(this, stateTransferPlanner);
         }
+        if (this.relationGraftPlanner == null) {
+            this.relationGraftPlanner = new RelationGraftPlanner();
+        }
+        if (this.relationGraftService == null) {
+            this.relationGraftService = new RelationGraftService(this, relationGraftPlanner);
+        }
         if (this.focusInteractionListener == null) {
             this.focusInteractionListener = new FocusInteractionListener(this);
         }
@@ -91,6 +104,7 @@ public final class GraftingPlugin extends JavaPlugin {
 
     private void registerListeners() {
         getServer().getPluginManager().registerEvents(stateTransferService, this);
+        getServer().getPluginManager().registerEvents(relationGraftService, this);
         getServer().getPluginManager().registerEvents(focusInteractionListener, this);
     }
 
@@ -136,5 +150,9 @@ public final class GraftingPlugin extends JavaPlugin {
 
     public StateTransferService stateTransferService() {
         return stateTransferService;
+    }
+
+    public RelationGraftService relationGraftService() {
+        return relationGraftService;
     }
 }

@@ -18,8 +18,11 @@ public final class GraftCompatibilityValidatorTest {
         GraftCompatibilityValidator validator = new GraftCompatibilityValidator();
         GraftSubject sun = new GraftSubject("concept:sun", "Sun", SubjectKind.CONCEPT, Set.of(GraftAspect.LIGHT, GraftAspect.HEAT, GraftAspect.IGNITE));
         GraftSubject beginning = new GraftSubject("concept:beginning", "Beginning", SubjectKind.CONCEPT, Set.of(GraftAspect.ENTRY, GraftAspect.PATH_START, GraftAspect.BEGIN));
+        GraftSubject zombie = new GraftSubject("entity:zombie", "Zombie", SubjectKind.ENTITY, Set.of(GraftAspect.AGGRO, GraftAspect.TARGET, GraftAspect.TETHER));
+        GraftSubject villager = new GraftSubject("entity:villager", "Villager", SubjectKind.ENTITY, Set.of());
+        GraftSubject chest = new GraftSubject("container:chest", "Chest", SubjectKind.CONTAINER, Set.of(GraftAspect.DESTINATION, GraftAspect.CONTAINER_LINK));
+        GraftSubject barrel = new GraftSubject("container:barrel", "Barrel", SubjectKind.CONTAINER, Set.of());
         GraftSubject stone = new GraftSubject("block:stone", "Stone", SubjectKind.BLOCK, Set.of());
-        GraftSubject zombie = new GraftSubject("entity:zombie", "Zombie", SubjectKind.ENTITY, Set.of());
 
         List<GraftAspect> stateAspects = validator.compatibleSourceAspects(GraftFamily.STATE, sun);
         if (!stateAspects.equals(List.of(GraftAspect.LIGHT, GraftAspect.HEAT, GraftAspect.IGNITE))) {
@@ -33,6 +36,12 @@ public final class GraftCompatibilityValidatorTest {
         }
         if (validator.validateTarget(beginning, GraftAspect.BEGIN, zombie).success()) {
             throw new AssertionError("Begin should not validate against an entity target");
+        }
+        if (!validator.validateTarget(zombie, GraftAspect.AGGRO, villager).success()) {
+            throw new AssertionError("Aggro should validate against an entity target");
+        }
+        if (!validator.validateTarget(chest, GraftAspect.DESTINATION, barrel).success()) {
+            throw new AssertionError("Destination should validate against a container target");
         }
     }
 }

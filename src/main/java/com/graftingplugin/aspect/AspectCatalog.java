@@ -91,6 +91,7 @@ public final class AspectCatalog {
                 aspects.add(GraftAspect.HEAL);
             }
         }
+        aspects.add(GraftAspect.TETHER);
         if (entity instanceof Mob mob && mob.getTarget() != null) {
             aspects.add(GraftAspect.AGGRO);
             aspects.add(GraftAspect.TARGET);
@@ -128,6 +129,7 @@ public final class AspectCatalog {
         }
 
         EnumSet<GraftAspect> aspects = EnumSet.of(GraftAspect.ON_HIT, GraftAspect.RECEIVER, GraftAspect.TARGET);
+        aspects.add(GraftAspect.TETHER);
         if (projectile.getShooter() != null) {
             aspects.add(GraftAspect.OWNER);
         }
