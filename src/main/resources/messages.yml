@@ -1,0 +1,4 @@
+mode-set: <gray>Graft mode set to <aqua>{family}</aqua>.</gray>
+concept-armed: <gray>Abstract concept <gold>{concept}</gold> stored as your next source.</gray>
+cast-cleared: <gray>Your stored graft selection has been cleared.</gray>
+focus-given: <gray>You have received a <light_purple>Mystic Focus</light_purple>.</gray>

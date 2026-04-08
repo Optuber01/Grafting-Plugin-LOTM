@@ -1,0 +1,16 @@
+name: GraftingPlugin
+version: ${version}
+main: com.graftingplugin.GraftingPlugin
+api-version: '1.21'
+description: Aspect-based universal grafting for Paper.
+authors:
+  - OpenAI
+commands:
+  graft:
+    description: Core grafting command.
+    usage: /graft mode <state|relation|topology|sequence>
+permissions:
+  grafting.use:
+    default: true
+  grafting.admin:
+    default: op

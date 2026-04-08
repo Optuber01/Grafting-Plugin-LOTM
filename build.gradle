@@ -1,0 +1,78 @@
+plugins {
+    id 'java'
+}
+
+group = 'com.graftingplugin'
+version = '0.1.0-SNAPSHOT'
+
+def paperApiCoordinate = 'io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT'
+def localPaperApi = file('.tools/paper-api/paper-api-1.21.11-R0.1-20260404.205808-87.jar')
+def localDependencyJars = fileTree('.tools/deps') {
+    include '*.jar'
+}
+
+repositories {
+    mavenCentral()
+    maven {
+        name = 'papermc'
+        url = 'https://repo.papermc.io/repository/maven-public/'
+    }
+}
+
+dependencies {
+    if (localPaperApi.exists()) {
+        compileOnly files(localPaperApi)
+    } else {
+        compileOnly(paperApiCoordinate) {
+            transitive = false
+        }
+    }
+
+    if (!localDependencyJars.isEmpty()) {
+        compileOnly localDependencyJars
+        testImplementation localDependencyJars
+    }
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = 21
+}
+
+sourceSets {
+    test {
+        java.srcDir 'src/test/java'
+        resources.srcDir 'src/test/resources'
+    }
+}
+
+configurations {
+    testImplementation.extendsFrom compileOnly
+}
+
+processResources {
+    filteringCharset = 'UTF-8'
+    filesMatching('plugin.yml') {
+        expand(version: project.version)
+    }
+}
+
+tasks.named('test') {
+    enabled = false
+}
+
+tasks.register('testHarness', JavaExec) {
+    group = 'verification'
+    description = 'Runs the custom plugin test harness.'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.graftingplugin.tests.TestHarness'
+    jvmArgs '-ea'
+}
+
+check.dependsOn tasks.named('testHarness')
