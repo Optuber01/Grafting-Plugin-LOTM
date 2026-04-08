@@ -81,32 +81,12 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
             plugin.messages().send(player, "unknown-concept", "concept", args[1]);
             return;
         }
-
-        List<GraftAspect> compatibleAspects = plugin.compatibilityValidator().compatibleSourceAspects(session.family(), source);
-        if (compatibleAspects.isEmpty()) {
+        if (!plugin.castSelectionService().armSource(player, source)) {
             plugin.messages().send(player, "concept-incompatible", java.util.Map.of(
                 "concept", source.displayName(),
                 "family", session.family().displayName()
             ));
-            return;
         }
-
-        session.setSource(source);
-        if (compatibleAspects.size() == 1) {
-            GraftAspect selectedAspect = compatibleAspects.getFirst();
-            session.setSelectedAspect(selectedAspect);
-            plugin.messages().send(player, "concept-armed-single", java.util.Map.of(
-                "concept", source.displayName(),
-                "aspect", selectedAspect.displayName()
-            ));
-            return;
-        }
-
-        plugin.messages().send(player, "concept-armed-multiple", java.util.Map.of(
-            "concept", source.displayName(),
-            "family", session.family().displayName(),
-            "aspects", formatAspectList(compatibleAspects)
-        ));
     }
 
     private void handleAspect(CommandSender sender, String[] args) {
@@ -119,26 +99,12 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
             return;
         }
 
-        CastSession session = plugin.castSessionManager().session(player.getUniqueId());
-        GraftSubject source = session.source();
-        if (source == null) {
-            plugin.messages().send(player, "no-source-selected");
-            return;
-        }
-
         GraftAspect aspect = GraftAspect.fromInput(args[1]).orElse(null);
         if (aspect == null) {
             plugin.messages().send(player, "invalid-aspect", "aspect", args[1]);
             return;
         }
-
-        if (!plugin.compatibilityValidator().validateAspectSelection(session.family(), source, aspect).success()) {
-            plugin.messages().send(player, "invalid-aspect", "aspect", args[1]);
-            return;
-        }
-
-        session.setSelectedAspect(aspect);
-        plugin.messages().send(player, "aspect-selected", "aspect", aspect.displayName());
+        plugin.castSelectionService().selectAspect(player, aspect);
     }
 
     private void handleClear(CommandSender sender) {

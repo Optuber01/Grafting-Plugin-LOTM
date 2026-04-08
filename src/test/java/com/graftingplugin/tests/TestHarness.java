@@ -5,9 +5,11 @@ public final class TestHarness {
     public static void main(String[] args) {
         run("AspectCatalogTest", AspectCatalogTest::run);
         run("ConceptRegistryTest", ConceptRegistryTest::run);
+        run("PluginSettingsTest", PluginSettingsTest::run);
         run("SubjectResolverTest", SubjectResolverTest::run);
         run("GraftCompatibilityValidatorTest", GraftCompatibilityValidatorTest::run);
-        System.out.println("All milestone-2 tests passed.");
+        run("StateTransferPlannerTest", StateTransferPlannerTest::run);
+        System.out.println("All milestone-3 tests passed.");
     }
 
     private static void run(String name, Runnable test) {

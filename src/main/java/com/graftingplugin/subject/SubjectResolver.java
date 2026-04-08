@@ -36,10 +36,10 @@ public final class SubjectResolver {
     }
 
     public Optional<GraftSubject> resolveBlock(Material material) {
-        Set<GraftAspect> aspects = aspectCatalog.blockAspects(material);
-        if (aspects.isEmpty()) {
+        if (material == null || material == Material.AIR || material == Material.CAVE_AIR || material == Material.VOID_AIR) {
             return Optional.empty();
         }
+        Set<GraftAspect> aspects = aspectCatalog.blockAspects(material);
         SubjectKind kind = aspectCatalog.isContainer(material) ? SubjectKind.CONTAINER : SubjectKind.BLOCK;
         return Optional.of(new GraftSubject(
             kind.name().toLowerCase(Locale.ROOT) + ':' + material.name().toLowerCase(Locale.ROOT),
@@ -54,9 +54,6 @@ public final class SubjectResolver {
             return Optional.empty();
         }
         Set<GraftAspect> aspects = aspectCatalog.entityAspects(entity);
-        if (aspects.isEmpty()) {
-            return Optional.empty();
-        }
         return Optional.of(new GraftSubject(
             "entity:" + entity.getType().name().toLowerCase(Locale.ROOT),
             humanize(entity.getType().name()),
@@ -70,9 +67,6 @@ public final class SubjectResolver {
             return Optional.empty();
         }
         Set<GraftAspect> aspects = aspectCatalog.itemAspects(itemStack);
-        if (aspects.isEmpty()) {
-            return Optional.empty();
-        }
         SubjectKind kind = switch (itemStack.getType()) {
             case POTION, SPLASH_POTION, LINGERING_POTION, TIPPED_ARROW -> SubjectKind.POTION;
             default -> SubjectKind.ITEM;
@@ -90,9 +84,6 @@ public final class SubjectResolver {
             return Optional.empty();
         }
         Set<GraftAspect> aspects = aspectCatalog.projectileAspects(projectile);
-        if (aspects.isEmpty()) {
-            return Optional.empty();
-        }
         return Optional.of(new GraftSubject(
             "projectile:" + projectile.getType().name().toLowerCase(Locale.ROOT),
             humanize(projectile.getType().name()),

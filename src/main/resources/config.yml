@@ -2,6 +2,15 @@ focus:
   material: BLAZE_ROD
   name: <light_purple>Mystic Focus</light_purple>
   interaction-range: 8
+state-transfer:
+  effect-duration-seconds: 20
+  field-duration-seconds: 12
+  field-radius: 4
+  pulse-interval-ticks: 20
+  ignite-fire-ticks: 100
+  heat-damage: 1.0
+  heal-amount: 4.0
+  bounce-count: 3
 concepts:
   sun:
     name: Sun
