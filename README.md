@@ -20,10 +20,17 @@ The implementation is standalone and lightweight:
 
 ## Requirements
 
-- Java 21
+- Java 21 JDK
 - Paper 1.21.11
 
+Validated in this workspace with:
+
+- Java: `OpenJDK 21.0.9`
+- Paper API jar: `.tools/paper-api/paper-api-1.21.11-R0.1-20260404.205808-87.jar`
+
 ## Build
+
+Standard Gradle build:
 
 Windows:
 
@@ -37,18 +44,53 @@ macOS / Linux:
 ./gradlew build
 ```
 
-Useful development task:
+Useful Gradle verification task:
 
 ```powershell
 .\gradlew.bat testHarness
 ```
 
-The built jar is written to `build/libs/`.
+The Gradle-built jar is written to `build/libs/`.
+
+## Offline verification (Windows)
+
+For this restricted Windows environment, use the repo-local offline verifier instead of the Gradle wrapper:
+
+```powershell
+.\verify-offline.bat
+```
+
+Direct PowerShell entry point:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-offline.ps1
+```
+
+The offline verifier:
+
+- requires `JAVA_HOME` to point to a Java 21 JDK, or `java`, `javac`, and `jar` on `PATH`
+- compiles `src/main/java` and `src/test/java`
+- uses the local Paper API jar and `.tools/deps/*.jar`
+- builds `build/offline-verify/libs/GraftingPlugin-0.1.0-SNAPSHOT.jar`
+- runs `com.graftingplugin.tests.TestHarness`
+- exits non-zero on any compile or test failure
+
+## Gradle wrapper limitation in restricted environments
+
+The checked-in wrapper targets Gradle `8.14.3` and bootstraps itself from:
+
+```text
+https://services.gradle.org/distributions/gradle-8.14.3-bin.zip
+```
+
+When outbound network access is blocked, `gradlew` / `gradlew.bat` fails before project evaluation. That is an environment bootstrap limitation, not a plugin code failure. Use `verify-offline.bat` in that case.
 
 ## Install
 
-1. Build the plugin.
-2. Copy the jar from `build/libs/` into your server's `plugins/` directory.
+1. Build or verify the plugin.
+   - Gradle: `./gradlew build` or `.\gradlew.bat build`
+   - Offline Windows path: `.\verify-offline.bat`
+2. Copy the jar from `build/libs/` or `build/offline-verify/libs/` into your server's `plugins/` directory.
 3. Start the server once to generate `config.yml` and `messages.yml`.
 4. Use `/graft givefocus` to get the default focus item.
 
@@ -195,6 +237,12 @@ Important default timings:
 - Active graft tracking is in-memory only and does not survive restart.
 - The custom verification entry point is `testHarness`.
 - `check` depends on `testHarness`.
+
+## Paper smoke test status
+
+- This repository includes a Paper API jar for compilation, not a Paper server jar for startup testing.
+- In a restricted environment with no preinstalled Paper server binary and no outbound download access, a local Paper smoke load cannot be executed from this repo alone.
+- To smoke test manually, copy the built jar into a Paper `1.21.11` server and confirm the plugin loads, `/graft` registers, and startup logs stay clean.
 
 ## Current limitations
 
