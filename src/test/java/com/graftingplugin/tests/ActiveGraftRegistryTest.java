@@ -17,6 +17,7 @@ public final class ActiveGraftRegistryTest {
         testStateLimitReplacesOldest();
         testSingleSlotFamiliesReplaceOldest();
         testUnregisterRemovesActiveGraft();
+        testClearOwnerRunsCleanupAndRemovesEntries();
     }
 
     private static void testStateLimitReplacesOldest() {
@@ -75,6 +76,28 @@ public final class ActiveGraftRegistryTest {
 
         if (!registry.activeFor(ownerId).isEmpty()) {
             throw new AssertionError("Unregister should remove the active graft entry");
+        }
+    }
+
+    private static void testClearOwnerRunsCleanupAndRemovesEntries() {
+        ActiveGraftRegistry registry = new ActiveGraftRegistry();
+        UUID ownerId = UUID.randomUUID();
+        AtomicInteger cleanupCount = new AtomicInteger();
+
+        registry.register(UUID.randomUUID(), ownerId, GraftFamily.STATE, "Heat", "Sun", "Zombie", 200, cleanupCount::incrementAndGet);
+        registry.register(UUID.randomUUID(), ownerId, GraftFamily.TOPOLOGY, "Anchor", "Door", "Anchor", 200, cleanupCount::incrementAndGet);
+
+        List<Runnable> cleanupActions = registry.clearOwner(ownerId);
+        cleanupActions.forEach(Runnable::run);
+
+        if (cleanupActions.size() != 2) {
+            throw new AssertionError("Expected two cleanup callbacks from clearOwner, got " + cleanupActions.size());
+        }
+        if (cleanupCount.get() != 2) {
+            throw new AssertionError("Expected two cleanup executions from clearOwner, got " + cleanupCount.get());
+        }
+        if (!registry.activeFor(ownerId).isEmpty()) {
+            throw new AssertionError("clearOwner should remove all active graft entries for the owner");
         }
     }
 }

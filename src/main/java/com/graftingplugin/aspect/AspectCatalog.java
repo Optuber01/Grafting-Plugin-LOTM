@@ -23,6 +23,22 @@ import java.util.Set;
 
 public final class AspectCatalog {
 
+    private static final double MASS_HEAVY_THRESHOLD = 3.0;
+
+    private final DynamicPropertyEvaluator evaluator = new DynamicPropertyEvaluator();
+
+    public DynamicPropertyProfile blockProperties(Material material) {
+        return evaluator.evaluateBlock(material);
+    }
+
+    public DynamicPropertyProfile entityProperties(Entity entity) {
+        return evaluator.evaluateEntity(entity);
+    }
+
+    public DynamicPropertyProfile itemProperties(ItemStack itemStack) {
+        return evaluator.evaluateItem(itemStack);
+    }
+
     public Set<GraftAspect> blockAspects(Material material) {
         if (isAir(material)) {
             return Set.of();
@@ -69,6 +85,11 @@ public final class AspectCatalog {
         if (isPoweredBlock(material)) {
             aspects.add(GraftAspect.POWERED);
         }
+
+        // All blocks can act as an anchor point
+        aspects.add(GraftAspect.ANCHOR);
+
+        deriveFromProperties(aspects, evaluator.evaluateBlock(material));
         return Set.copyOf(aspects);
     }
 
@@ -99,6 +120,8 @@ public final class AspectCatalog {
         if (entity instanceof Tameable tameable && tameable.getOwner() != null) {
             aspects.add(GraftAspect.OWNER);
         }
+
+        deriveFromProperties(aspects, evaluator.evaluateEntity(entity));
         return Set.copyOf(aspects);
     }
 
@@ -272,5 +295,29 @@ public final class AspectCatalog {
             || material == Material.OBSERVER
             || material == Material.REPEATER
             || material == Material.COMPARATOR;
+    }
+
+    private void deriveFromProperties(EnumSet<GraftAspect> aspects, DynamicPropertyProfile profile) {
+        if (profile.exceeds(DynamicProperty.MASS, MASS_HEAVY_THRESHOLD)) {
+            aspects.add(GraftAspect.HEAVY);
+        }
+        if (profile.get(DynamicProperty.THERMAL) > 0 && !aspects.contains(GraftAspect.HEAT)) {
+            aspects.add(GraftAspect.HEAT);
+        }
+        if (profile.get(DynamicProperty.THERMAL) < 0 && !aspects.contains(GraftAspect.FREEZE)) {
+            aspects.add(GraftAspect.FREEZE);
+        }
+        if (profile.get(DynamicProperty.LUMINANCE) > 0 && !aspects.contains(GraftAspect.LIGHT)) {
+            aspects.add(GraftAspect.LIGHT);
+        }
+        if (profile.get(DynamicProperty.VOLATILITY) > 0 && !aspects.contains(GraftAspect.EXPLOSIVE)) {
+            aspects.add(GraftAspect.EXPLOSIVE);
+        }
+        if (profile.get(DynamicProperty.MOTILITY) > 0.25) {
+            aspects.add(GraftAspect.SPEED);
+        }
+        if (profile.get(DynamicProperty.MOTILITY) > 0 && profile.get(DynamicProperty.MOTILITY) < 0.15) {
+            aspects.add(GraftAspect.SLOW);
+        }
     }
 }

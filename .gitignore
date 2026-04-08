@@ -1,11 +1,17 @@
-.gradle/
-build/
-run/
-.tools/
-.idea/
-out/
-.vscode/
+# Build and runtime artifacts
+/.gradle/
+/build/
+/run/
+/out/
 *.log
 hs_err_pid*
-thoughts/
-.mindmodel/
+
+# Local tooling and editor state
+/.tools/
+/.idea/
+/.vscode/
+
+# Local servers and agent artifacts
+/MC PAPER SERVER/
+/thoughts/
+/.mindmodel/

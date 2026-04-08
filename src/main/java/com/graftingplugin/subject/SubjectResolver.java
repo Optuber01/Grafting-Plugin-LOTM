@@ -1,6 +1,7 @@
 package com.graftingplugin.subject;
 
 import com.graftingplugin.aspect.AspectCatalog;
+import com.graftingplugin.aspect.DynamicPropertyProfile;
 import com.graftingplugin.aspect.GraftAspect;
 import com.graftingplugin.concept.ConceptRegistry;
 import org.bukkit.Location;
@@ -40,12 +41,14 @@ public final class SubjectResolver {
             return Optional.empty();
         }
         Set<GraftAspect> aspects = aspectCatalog.blockAspects(material);
+        DynamicPropertyProfile profile = aspectCatalog.blockProperties(material);
         SubjectKind kind = aspectCatalog.isContainer(material) ? SubjectKind.CONTAINER : SubjectKind.BLOCK;
         return Optional.of(new GraftSubject(
             kind.name().toLowerCase(Locale.ROOT) + ':' + material.name().toLowerCase(Locale.ROOT),
             humanize(material.name()),
             kind,
-            aspects
+            aspects,
+            profile
         ));
     }
 
@@ -54,11 +57,13 @@ public final class SubjectResolver {
             return Optional.empty();
         }
         Set<GraftAspect> aspects = aspectCatalog.entityAspects(entity);
+        DynamicPropertyProfile profile = aspectCatalog.entityProperties(entity);
         return Optional.of(new GraftSubject(
             "entity:" + entity.getType().name().toLowerCase(Locale.ROOT),
             humanize(entity.getType().name()),
             SubjectKind.ENTITY,
-            aspects
+            aspects,
+            profile
         ));
     }
 
@@ -67,7 +72,7 @@ public final class SubjectResolver {
             return Optional.empty();
         }
 
-        return resolveItem(itemStack.getType(), aspectCatalog.itemAspects(itemStack));
+        return resolveItem(itemStack.getType(), aspectCatalog.itemAspects(itemStack), aspectCatalog.itemProperties(itemStack));
     }
 
     public Optional<GraftSubject> resolveItem(Material material) {
@@ -75,10 +80,10 @@ public final class SubjectResolver {
             return Optional.empty();
         }
 
-        return resolveItem(material, aspectCatalog.itemAspects(material));
+        return resolveItem(material, aspectCatalog.itemAspects(material), aspectCatalog.blockProperties(material));
     }
 
-    private Optional<GraftSubject> resolveItem(Material material, Set<GraftAspect> aspects) {
+    private Optional<GraftSubject> resolveItem(Material material, Set<GraftAspect> aspects, DynamicPropertyProfile profile) {
         SubjectKind kind = switch (material) {
             case POTION, SPLASH_POTION, LINGERING_POTION, TIPPED_ARROW -> SubjectKind.POTION;
             default -> SubjectKind.ITEM;
@@ -87,7 +92,8 @@ public final class SubjectResolver {
             kind.name().toLowerCase(Locale.ROOT) + ':' + material.name().toLowerCase(Locale.ROOT),
             humanize(material.name()),
             kind,
-            aspects
+            aspects,
+            profile
         ));
     }
 

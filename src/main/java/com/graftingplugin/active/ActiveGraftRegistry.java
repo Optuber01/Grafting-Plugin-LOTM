@@ -79,6 +79,20 @@ public final class ActiveGraftRegistry {
             .toList();
     }
 
+    public synchronized List<Runnable> clearOwner(UUID ownerId) {
+        List<RegisteredGraft> ownerEntries = byOwner.remove(ownerId);
+        if (ownerEntries == null || ownerEntries.isEmpty()) {
+            return List.of();
+        }
+
+        List<Runnable> cleanupActions = new ArrayList<>(ownerEntries.size());
+        for (RegisteredGraft entry : ownerEntries) {
+            byTrackingId.remove(entry.trackingId());
+            cleanupActions.add(entry.cleanupAction());
+        }
+        return List.copyOf(cleanupActions);
+    }
+
     public synchronized void clear() {
         byTrackingId.clear();
         byOwner.clear();

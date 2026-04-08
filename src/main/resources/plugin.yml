@@ -4,11 +4,11 @@ main: com.graftingplugin.GraftingPlugin
 api-version: '1.21'
 description: Aspect-based universal grafting for Paper.
 authors:
-  - OpenAI
+  - Optuber
 commands:
   graft:
     description: Core grafting command.
-    usage: /graft <mode|concept|aspect|inspect|clear|active|givefocus|reload>
+    usage: /graft <mode|concept|aspect|inspect|clear|active|status|clearactive|givefocus|reload>
 permissions:
   grafting.use:
     default: true

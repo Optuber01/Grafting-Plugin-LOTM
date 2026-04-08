@@ -52,6 +52,11 @@ public final class CastSelectionService {
 
     public boolean selectAspect(Player player, GraftAspect aspect) {
         CastSession session = plugin.castSessionManager().session(player.getUniqueId());
+        if (!plugin.compatibilityValidator().supportedFamilyAspects(session.family()).contains(aspect)) {
+            plugin.messages().send(player, "invalid-aspect", "aspect", aspect.displayName());
+            return false;
+        }
+
         GraftSubject source = session.source();
         if (source == null) {
             plugin.messages().send(player, "no-source-selected");

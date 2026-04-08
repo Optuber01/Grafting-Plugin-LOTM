@@ -114,7 +114,7 @@ The focus must be in the player's main hand.
    - Right-click while a source and aspect are selected.
    - For State Transfer, sneak while casting to target an area instead of a single block/entity/projectile.
 
-Use `/graft inspect` to see the current family, source, selected aspect, and compatible aspects.
+Use `/graft inspect` to see the current family, source, selected aspect, the supported aspect surface for the current mode, and the source-compatible aspects that are actually usable.
 
 ## Commands
 
@@ -126,12 +126,14 @@ Use `/graft inspect` to see the current family, source, selected aspect, and com
 | `/graft inspect` | Show current cast state and compatible aspects. | `grafting.use` |
 | `/graft clear` | Clear the current cast state. | `grafting.use` |
 | `/graft active` | List currently tracked active grafts for the player. | `grafting.use` |
+| `/graft status [player]` | Show mode, source, supported aspects, source-compatible aspects, and active graft count for a player. | `grafting.admin` |
+| `/graft clearactive [player]` | Clear active graft runtime effects for a player. | `grafting.admin` |
 | `/graft givefocus [player]` | Give the focus item. | `grafting.admin` |
 | `/graft reload` | Reload config/messages and clear live runtime effects. | `grafting.admin` |
 
 ## Implemented graft families
 
-The aspect vocabulary is broader than the currently shipped runtime handlers. The list below describes the behaviors that are actually implemented.
+The aspect vocabulary is broader than the currently shipped runtime handlers, but the plugin now filters selection and inspection to only the aspects that the current planners/runtime actually support. The list below describes those implemented behaviors.
 
 ### State Transfer
 
@@ -173,7 +175,7 @@ Implemented runtime behaviors:
 - transfer an `on-hit` payload onto a projectile
 - relay a container `on-open` trigger toward a stored anchor
 
-Sequence aspects such as `on-enter`, `on-consume`, `return`, and `repeat` are part of the shared vocabulary but are not currently implemented.
+Sequence aspects such as `on-enter`, `on-consume`, `return`, and `repeat` remain part of the shared vocabulary but are not currently selectable because they are not implemented.
 
 ## Active graft tracking
 
@@ -246,6 +248,7 @@ Important default timings:
 
 ## Current limitations
 
-- The shared aspect enum is larger than the currently implemented runtime handlers.
+- The shared aspect enum is still larger than the currently implemented runtime handlers.
+- Selection and inspect flows intentionally hide unsupported vocabulary instead of exposing speculative future behavior.
 - Sequence Tamper is intentionally narrow right now and only supports `on-hit` and `on-open` flows.
 - Active graft reporting covers retained runtime state, not every immediate side effect of a cast.

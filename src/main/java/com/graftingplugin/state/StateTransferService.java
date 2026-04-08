@@ -82,7 +82,7 @@ public final class StateTransferService implements Listener {
         }
 
         boolean success = switch (plan.mode()) {
-            case ENTITY_EFFECT -> applyEntityEffect(caster, aspect, targetEntity);
+            case ENTITY_EFFECT -> applyEntityEffect(caster, plan, targetEntity);
             case ENTITY_FIRE -> applyEntityFire(caster, aspect, targetEntity);
             case ENTITY_BOUNCE -> applyEntityBounce(caster, source, aspect, target, targetEntity);
             default -> false;
@@ -261,7 +261,7 @@ public final class StateTransferService implements Listener {
             return null;
         }
 
-        StateTransferPlan plan = planner.plan(aspect, target).orElse(null);
+        StateTransferPlan plan = planner.plan(aspect, target, source.properties()).orElse(null);
         if (plan == null) {
             plugin.messages().send(caster, "state-handler-missing", Map.of(
                 "aspect", aspect.displayName(),
@@ -272,37 +272,44 @@ public final class StateTransferService implements Listener {
         return plan;
     }
 
-    private boolean applyEntityEffect(Player caster, GraftAspect aspect, Entity targetEntity) {
+    private boolean applyEntityEffect(Player caster, StateTransferPlan plan, Entity targetEntity) {
         if (!(targetEntity instanceof LivingEntity livingEntity)) {
             return false;
         }
 
         StateTransferSettings settings = plugin.settings().stateTransferSettings();
         int duration = settings.effectDurationTicks();
+        int amp = plan.amplifier();
+        GraftAspect aspect = plan.aspect();
         switch (aspect) {
             case LIGHT, GLOW -> {
-                livingEntity.addPotionEffect(new PotionEffect(PotionEffectType.GLOWING, duration, 0, true, true, true));
+                livingEntity.addPotionEffect(new PotionEffect(PotionEffectType.GLOWING, duration, amp, true, true, true));
                 return true;
             }
             case SPEED -> {
-                livingEntity.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, duration, 1, true, true, true));
+                livingEntity.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, duration, 1 + amp, true, true, true));
                 return true;
             }
             case SLOW, STICKY, FREEZE -> {
-                livingEntity.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, duration, 1, true, true, true));
+                livingEntity.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, duration, 1 + amp, true, true, true));
+                return true;
+            }
+            case HEAVY -> {
+                livingEntity.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, duration, 1 + amp, true, true, true));
+                livingEntity.addPotionEffect(new PotionEffect(PotionEffectType.MINING_FATIGUE, duration, amp, true, true, true));
                 return true;
             }
             case POISON -> {
-                livingEntity.addPotionEffect(new PotionEffect(PotionEffectType.POISON, duration, 0, true, true, true));
+                livingEntity.addPotionEffect(new PotionEffect(PotionEffectType.POISON, duration, amp, true, true, true));
                 return true;
             }
             case HEAL -> {
                 livingEntity.setHealth(Math.min(livingEntity.getMaxHealth(), livingEntity.getHealth() + settings.healAmount()));
-                livingEntity.addPotionEffect(new PotionEffect(PotionEffectType.REGENERATION, duration, 0, true, true, true));
+                livingEntity.addPotionEffect(new PotionEffect(PotionEffectType.REGENERATION, duration, amp, true, true, true));
                 return true;
             }
             case CONCEAL -> {
-                livingEntity.addPotionEffect(new PotionEffect(PotionEffectType.INVISIBILITY, duration, 0, true, true, true));
+                livingEntity.addPotionEffect(new PotionEffect(PotionEffectType.INVISIBILITY, duration, amp, true, true, true));
                 return true;
             }
             default -> {
@@ -346,6 +353,11 @@ public final class StateTransferService implements Listener {
             }
             case LIGHT, GLOW -> {
                 projectile.setGlowing(true);
+                yield true;
+            }
+            case HEAVY -> {
+                projectile.setGravity(true);
+                projectile.setVelocity(projectile.getVelocity().multiply(0.75D));
                 yield true;
             }
             default -> false;
@@ -418,7 +430,12 @@ public final class StateTransferService implements Listener {
             return;
         }
 
-        center.getWorld().spawnParticle(fieldParticle(aspect), center, 12, settings.fieldRadius() * 0.25D, 0.5D, settings.fieldRadius() * 0.25D, 0.02D);
+        try {
+            center.getWorld().spawnParticle(fieldParticle(aspect), center, 12, settings.fieldRadius() * 0.25D, 0.5D, settings.fieldRadius() * 0.25D, 0.02D);
+        } catch (IllegalArgumentException e) {
+            // Fallback if the particle requires data we don't have
+            center.getWorld().spawnParticle(Particle.CLOUD, center, 12, settings.fieldRadius() * 0.25D, 0.5D, settings.fieldRadius() * 0.25D, 0.02D);
+        }
         for (LivingEntity entity : center.getWorld().getNearbyLivingEntities(center, settings.fieldRadius())) {
             switch (aspect) {
                 case LIGHT, GLOW -> entity.addPotionEffect(new PotionEffect(PotionEffectType.GLOWING, settings.pulseIntervalTicks() + 10, 0, true, true, true));
@@ -432,6 +449,10 @@ public final class StateTransferService implements Listener {
                 }
                 case SPEED -> entity.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, settings.pulseIntervalTicks() + 10, 0, true, true, true));
                 case SLOW, STICKY, FREEZE -> entity.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, settings.pulseIntervalTicks() + 10, 0, true, true, true));
+                case HEAVY -> {
+                    entity.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, settings.pulseIntervalTicks() + 10, 1, true, true, true));
+                    entity.addPotionEffect(new PotionEffect(PotionEffectType.MINING_FATIGUE, settings.pulseIntervalTicks() + 10, 0, true, true, true));
+                }
                 case POISON -> entity.addPotionEffect(new PotionEffect(PotionEffectType.POISON, settings.pulseIntervalTicks() + 20, 0, true, true, true));
                 case HEAL -> entity.setHealth(Math.min(entity.getMaxHealth(), entity.getHealth() + settings.healAmount()));
                 case CONCEAL -> entity.addPotionEffect(new PotionEffect(PotionEffectType.INVISIBILITY, settings.pulseIntervalTicks() + 10, 0, true, true, true));
@@ -448,7 +469,8 @@ public final class StateTransferService implements Listener {
             case BOUNCE -> Particle.CLOUD;
             case SPEED -> Particle.CLOUD;
             case SLOW, STICKY, FREEZE -> Particle.SNOWFLAKE;
-            case POISON -> Particle.ENTITY_EFFECT;
+            case HEAVY -> Particle.ASH;
+            case POISON -> Particle.SQUID_INK;
             case HEAL -> Particle.HEART;
             case CONCEAL -> Particle.SMOKE;
             default -> Particle.ENCHANT;

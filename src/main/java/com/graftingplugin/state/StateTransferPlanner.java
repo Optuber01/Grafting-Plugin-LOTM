@@ -1,5 +1,7 @@
 package com.graftingplugin.state;
 
+import com.graftingplugin.aspect.DynamicProperty;
+import com.graftingplugin.aspect.DynamicPropertyProfile;
 import com.graftingplugin.aspect.GraftAspect;
 import com.graftingplugin.subject.GraftSubject;
 import com.graftingplugin.subject.SubjectKind;
@@ -17,9 +19,31 @@ public final class StateTransferPlanner {
         };
     }
 
+    public Optional<StateTransferPlan> plan(GraftAspect aspect, GraftSubject target, DynamicPropertyProfile sourceProfile) {
+        return plan(aspect, target).map(base -> base.withAmplifier(amplifierFromProfile(aspect, sourceProfile)));
+    }
+
+    public static int amplifierFromProfile(GraftAspect aspect, DynamicPropertyProfile profile) {
+        if (profile == null || profile == DynamicPropertyProfile.EMPTY) {
+            return 0;
+        }
+        return switch (aspect) {
+            case HEAVY -> {
+                double mass = profile.get(DynamicProperty.MASS);
+                yield mass >= 10.0 ? 2 : (mass >= 3.0 ? 1 : 0);
+            }
+            case HEAT, IGNITE -> profile.get(DynamicProperty.THERMAL) >= 2.0 ? 1 : 0;
+            case LIGHT, GLOW -> profile.get(DynamicProperty.LUMINANCE) >= 2.0 ? 1 : 0;
+            case SPEED -> profile.get(DynamicProperty.MOTILITY) > 0.3 ? 1 : 0;
+            case SLOW -> profile.get(DynamicProperty.MASS) >= 5.0 ? 1 : 0;
+            case EXPLOSIVE -> profile.get(DynamicProperty.VOLATILITY) >= 2.0 ? 1 : 0;
+            default -> 0;
+        };
+    }
+
     private Optional<StateTransferPlan> planEntity(GraftAspect aspect, SubjectKind kind) {
         return switch (aspect) {
-            case LIGHT, GLOW, SPEED, SLOW, STICKY, POISON, HEAL, CONCEAL, FREEZE -> Optional.of(new StateTransferPlan(aspect, kind, StateTransferMode.ENTITY_EFFECT, "Apply a temporary state effect to the entity."));
+            case LIGHT, GLOW, SPEED, SLOW, STICKY, POISON, HEAL, CONCEAL, FREEZE, HEAVY -> Optional.of(new StateTransferPlan(aspect, kind, StateTransferMode.ENTITY_EFFECT, "Apply a temporary state effect to the entity."));
             case IGNITE, HEAT -> Optional.of(new StateTransferPlan(aspect, kind, StateTransferMode.ENTITY_FIRE, "Apply direct heat or ignition to the entity."));
             case BOUNCE -> Optional.of(new StateTransferPlan(aspect, kind, StateTransferMode.ENTITY_BOUNCE, "Grant temporary bounce behavior to the entity."));
             default -> Optional.empty();
@@ -31,13 +55,14 @@ public final class StateTransferPlanner {
             case SPEED, SLOW, LIGHT, GLOW -> Optional.of(new StateTransferPlan(aspect, kind, StateTransferMode.PROJECTILE_TRAIT, "Modify projectile movement or visibility."));
             case POISON, IGNITE, HEAT -> Optional.of(new StateTransferPlan(aspect, kind, StateTransferMode.PROJECTILE_PAYLOAD, "Bind an on-hit state payload to the projectile."));
             case BOUNCE -> Optional.of(new StateTransferPlan(aspect, kind, StateTransferMode.PROJECTILE_BOUNCE, "Grant limited bounce behavior to the projectile."));
+            case HEAVY -> Optional.of(new StateTransferPlan(aspect, kind, StateTransferMode.PROJECTILE_TRAIT, "Add mass to the projectile, increasing impact."));
             default -> Optional.empty();
         };
     }
 
     private Optional<StateTransferPlan> planField(GraftAspect aspect, SubjectKind kind) {
         return switch (aspect) {
-            case LIGHT, HEAT, IGNITE, BOUNCE, SPEED, SLOW, STICKY, POISON, HEAL, GLOW, CONCEAL, FREEZE -> Optional.of(new StateTransferPlan(aspect, kind, StateTransferMode.FIELD, "Anchor a temporary state field in the world."));
+            case LIGHT, HEAT, IGNITE, BOUNCE, SPEED, SLOW, STICKY, POISON, HEAL, GLOW, CONCEAL, FREEZE, HEAVY -> Optional.of(new StateTransferPlan(aspect, kind, StateTransferMode.FIELD, "Anchor a temporary state field in the world."));
             default -> Optional.empty();
         };
     }

@@ -11,11 +11,13 @@ import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 public final class GraftCommand implements CommandExecutor, TabCompleter {
 
@@ -40,6 +42,8 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
             case "clear" -> handleClear(sender);
             case "inspect" -> handleInspect(sender);
             case "active" -> handleActive(sender);
+            case "status" -> handleStatus(sender, args);
+            case "clearactive" -> handleClearActive(sender, args);
             case "givefocus" -> handleGiveFocus(sender, args);
             case "reload" -> handleReload(sender);
             default -> sendUsage(sender);
@@ -126,6 +130,7 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
         player.sendMessage("Mode: " + session.family().displayName());
         player.sendMessage("Source: " + (session.source() == null ? "none" : session.source().displayName()));
         player.sendMessage("Aspect: " + (session.selectedAspect() == null ? "none" : session.selectedAspect().displayName()));
+        player.sendMessage("Supported aspects for mode: " + formatAspectList(plugin.compatibilityValidator().supportedFamilyAspects(session.family())));
         if (session.source() != null) {
             List<GraftAspect> compatibleAspects = plugin.compatibilityValidator().compatibleSourceAspects(session.family(), session.source());
             player.sendMessage("Available aspects: " + (compatibleAspects.isEmpty() ? "none" : formatAspectList(compatibleAspects)));
@@ -151,6 +156,81 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
                 + ": " + snapshot.sourceName()
                 + " -> " + snapshot.targetName()
                 + " (" + snapshot.remainingSeconds() + "s)");
+        }
+    }
+
+    private void handleStatus(CommandSender sender, String[] args) {
+        if (!sender.hasPermission("grafting.admin")) {
+            sender.sendMessage("You do not have permission to use this command.");
+            return;
+        }
+
+        Player target;
+        if (args.length >= 2) {
+            target = Bukkit.getPlayerExact(args[1]);
+        } else if (sender instanceof Player player) {
+            target = player;
+        } else {
+            sender.sendMessage("Usage: /graft status <player>");
+            return;
+        }
+        if (target == null) {
+            sender.sendMessage("Target player not found.");
+            return;
+        }
+
+        CastSession session = plugin.castSessionManager().session(target.getUniqueId());
+        sender.sendMessage("Graft status for " + target.getName() + ":");
+        sender.sendMessage("- Mode: " + session.family().displayName());
+        sender.sendMessage("- Source: " + describeSource(session));
+        sender.sendMessage("- Aspect: " + (session.selectedAspect() == null ? "none" : session.selectedAspect().displayName()));
+        sender.sendMessage("- Supported aspects: " + formatAspectList(plugin.compatibilityValidator().supportedFamilyAspects(session.family())));
+        if (session.source() != null) {
+            List<GraftAspect> compatibleAspects = plugin.compatibilityValidator().compatibleSourceAspects(session.family(), session.source());
+            sender.sendMessage("- Source-compatible aspects: " + (compatibleAspects.isEmpty() ? "none" : formatAspectList(compatibleAspects)));
+        }
+
+        List<ActiveGraftSnapshot> activeGrafts = plugin.activeGraftRegistry().activeFor(target.getUniqueId());
+        sender.sendMessage("- Active graft count: " + activeGrafts.size());
+        if (!activeGrafts.isEmpty()) {
+            for (ActiveGraftSnapshot snapshot : activeGrafts) {
+                sender.sendMessage("  * [" + snapshot.family().key() + "] " + snapshot.aspectName() + " -> " + snapshot.targetName() + " (" + snapshot.remainingSeconds() + "s)");
+            }
+        }
+    }
+
+    private void handleClearActive(CommandSender sender, String[] args) {
+        if (!sender.hasPermission("grafting.admin")) {
+            sender.sendMessage("You do not have permission to use this command.");
+            return;
+        }
+
+        Player target;
+        if (args.length >= 2) {
+            target = Bukkit.getPlayerExact(args[1]);
+        } else if (sender instanceof Player player) {
+            target = player;
+        } else {
+            sender.sendMessage("Usage: /graft clearactive <player>");
+            return;
+        }
+        if (target == null) {
+            sender.sendMessage("Target player not found.");
+            return;
+        }
+
+        List<Runnable> cleanupActions = plugin.activeGraftRegistry().clearOwner(target.getUniqueId());
+        cleanupActions.forEach(Runnable::run);
+        if (cleanupActions.isEmpty()) {
+            plugin.messages().send(sender, "no-active-grafts-cleared", "player", target.getName());
+        } else {
+            plugin.messages().send(sender, "active-grafts-cleared", Map.of(
+                "count", Integer.toString(cleanupActions.size()),
+                "player", target.getName()
+            ));
+        }
+        if (!target.equals(sender) && !cleanupActions.isEmpty()) {
+            plugin.messages().send(target, "active-grafts-cleared-notify");
         }
     }
 
@@ -195,6 +275,8 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
         sender.sendMessage("/graft inspect");
         sender.sendMessage("/graft clear");
         sender.sendMessage("/graft active");
+        sender.sendMessage("/graft status [player]");
+        sender.sendMessage("/graft clearactive [player]");
         sender.sendMessage("/graft givefocus [player]");
         sender.sendMessage("/graft reload");
     }
@@ -210,7 +292,7 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (args.length == 1) {
-            return filter(List.of("mode", "concept", "aspect", "inspect", "clear", "active", "givefocus", "reload"), args[0]);
+            return filter(List.of("mode", "concept", "aspect", "inspect", "clear", "active", "status", "clearactive", "givefocus", "reload"), args[0]);
         }
         if (args.length == 2 && args[0].equalsIgnoreCase("mode")) {
             return filter(List.of("state", "relation", "topology", "sequence"), args[1]);
@@ -221,21 +303,40 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
         if (args.length == 2 && args[0].equalsIgnoreCase("aspect") && sender instanceof Player player) {
             CastSession session = plugin.castSessionManager().session(player.getUniqueId());
             GraftSubject source = session.source();
-            if (source == null) {
-                return List.of();
-            }
-            return filter(plugin.compatibilityValidator().compatibleSourceAspects(session.family(), source).stream()
+            List<GraftAspect> aspects = source == null
+                ? plugin.compatibilityValidator().supportedFamilyAspects(session.family())
+                : plugin.compatibilityValidator().compatibleSourceAspects(session.family(), source);
+            return filter(aspects.stream()
                 .map(GraftAspect::key)
                 .toList(), args[1]);
         }
         if (args.length == 2 && args[0].equalsIgnoreCase("givefocus")) {
             return filter(Bukkit.getOnlinePlayers().stream().map(Player::getName).toList(), args[1]);
         }
+        if (args.length == 2 && (args[0].equalsIgnoreCase("status") || args[0].equalsIgnoreCase("clearactive"))) {
+            return filter(Bukkit.getOnlinePlayers().stream().map(Player::getName).toList(), args[1]);
+        }
         return List.of();
     }
 
     private String formatAspectList(List<GraftAspect> aspects) {
-        return String.join(", ", aspects.stream().map(GraftAspect::key).toList());
+        return aspects.isEmpty() ? "none" : String.join(", ", aspects.stream().map(GraftAspect::key).toList());
+    }
+
+    private String describeSource(CastSession session) {
+        if (session.source() == null) {
+            return "none";
+        }
+        StringBuilder builder = new StringBuilder(session.source().displayName());
+        if (session.sourceReference().hasEntity()) {
+            Entity entity = Bukkit.getEntity(session.sourceReference().entityId());
+            builder.append(entity == null ? " [entity:missing]" : " [entity:" + entity.getType().name().toLowerCase(Locale.ROOT) + "]");
+        } else if (session.sourceReference().hasBlockLocation()) {
+            builder.append(" [block]");
+        } else {
+            builder.append(" [virtual]");
+        }
+        return builder.toString();
     }
 
     private List<String> filter(List<String> options, String token) {

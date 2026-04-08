@@ -44,15 +44,30 @@ public final class FocusInteractionListener implements Listener {
         }
 
         event.setCancelled(true);
+        boolean isShift = player.isSneaking();
+        boolean isCtrl = player.isSprinting();
+
+        Block targetBlock = event.getClickedBlock();
+
         if (action == Action.LEFT_CLICK_AIR || action == Action.LEFT_CLICK_BLOCK) {
-            selectSource(player, event.getClickedBlock(), null);
+            if (isShift || isCtrl) {
+                if (readyForCast(player)) {
+                    applyCast(player, targetBlock, null);
+                } else {
+                    plugin.messages().send(player, "no-source-selected");
+                }
+            }
             return;
         }
         if (action == Action.RIGHT_CLICK_AIR || action == Action.RIGHT_CLICK_BLOCK) {
-            if (readyForCast(player)) {
-                applyCast(player, event.getClickedBlock(), null);
+            if (isShift || isCtrl) {
+                selectSource(player, targetBlock, null);
             } else {
-                selectSource(player, event.getClickedBlock(), null);
+                if (readyForCast(player)) {
+                    applyCast(player, targetBlock, null);
+                } else {
+                    selectSource(player, targetBlock, null);
+                }
             }
         }
     }
@@ -69,10 +84,17 @@ public final class FocusInteractionListener implements Listener {
         }
 
         event.setCancelled(true);
-        if (readyForCast(player)) {
-            applyCast(player, null, event.getRightClicked());
-        } else {
+        boolean isShift = player.isSneaking();
+        boolean isCtrl = player.isSprinting();
+
+        if (isShift || isCtrl) {
             selectSource(player, null, event.getRightClicked());
+        } else {
+            if (readyForCast(player)) {
+                applyCast(player, null, event.getRightClicked());
+            } else {
+                selectSource(player, null, event.getRightClicked());
+            }
         }
     }
 
@@ -101,7 +123,6 @@ public final class FocusInteractionListener implements Listener {
             case RELATION -> applyRelationGraft(player, clickedBlock, clickedEntity);
             case TOPOLOGY -> applyTopologyGraft(player, clickedBlock, clickedEntity);
             case SEQUENCE -> applySequenceTamper(player, clickedBlock, clickedEntity);
-            default -> plugin.messages().send(player, "family-runtime-pending", "family", session.family().displayName());
         }
     }
 
@@ -294,7 +315,7 @@ public final class FocusInteractionListener implements Listener {
             }
         }
 
-        Block targetBlock = player.getTargetBlockExact(plugin.settings().interactionRange());
+        Block targetBlock = player.getTargetBlockExact(plugin.settings().interactionRange(), org.bukkit.FluidCollisionMode.ALWAYS);
         if (targetBlock == null) {
             return null;
         }

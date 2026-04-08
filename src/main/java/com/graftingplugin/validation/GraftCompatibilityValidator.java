@@ -2,11 +2,15 @@ package com.graftingplugin.validation;
 
 import com.graftingplugin.aspect.GraftAspect;
 import com.graftingplugin.cast.GraftFamily;
+import com.graftingplugin.relation.RelationGraftPlanner;
+import com.graftingplugin.sequence.SequenceTamperPlanner;
+import com.graftingplugin.state.StateTransferPlanner;
 import com.graftingplugin.subject.GraftSubject;
 import com.graftingplugin.subject.SubjectKind;
+import com.graftingplugin.topology.TopologyGraftPlanner;
 
 import java.util.EnumMap;
-import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -22,6 +26,12 @@ public final class GraftCompatibilityValidator {
     public List<GraftAspect> compatibleSourceAspects(GraftFamily family, GraftSubject source) {
         return source.aspectsFor(family).stream()
             .filter(aspect -> supportsSourceKind(source.kind(), aspect))
+            .toList();
+    }
+
+    public List<GraftAspect> supportedFamilyAspects(GraftFamily family) {
+        return GraftAspect.forFamily(family).stream()
+            .filter(rules::containsKey)
             .toList();
     }
 
@@ -45,7 +55,7 @@ public final class GraftCompatibilityValidator {
         }
 
         CompatibilityRule rule = rules.get(aspect);
-        if (rule == null || !rule.targetKinds().contains(target.kind())) {
+        if (rule == null || !rule.supports(source.kind(), target.kind())) {
             return GraftCompatibilityResult.failure("Target subject cannot accept aspect " + aspect.displayName() + '.');
         }
         return GraftCompatibilityResult.ok();
@@ -58,58 +68,86 @@ public final class GraftCompatibilityValidator {
 
     private boolean supportsSourceKind(SubjectKind kind, GraftAspect aspect) {
         CompatibilityRule rule = rules.get(aspect);
-        return rule != null && rule.sourceKinds().contains(kind);
+        return rule != null && rule.supportsSource(kind);
     }
 
     private Map<GraftAspect, CompatibilityRule> buildRules() {
         Map<GraftAspect, CompatibilityRule> mappedRules = new EnumMap<>(GraftAspect.class);
-        add(mappedRules, Set.of(GraftAspect.LIGHT, GraftAspect.HEAT, GraftAspect.IGNITE, GraftAspect.FREEZE, GraftAspect.CONCEAL, GraftAspect.GLOW),
-            kinds(SubjectKind.BLOCK, SubjectKind.ENTITY, SubjectKind.ITEM, SubjectKind.PROJECTILE, SubjectKind.CONCEPT),
-            kinds(SubjectKind.BLOCK, SubjectKind.ENTITY, SubjectKind.PROJECTILE, SubjectKind.LOCATION, SubjectKind.AREA));
-        add(mappedRules, Set.of(GraftAspect.HEAVY, GraftAspect.PULL),
-            kinds(SubjectKind.ENTITY, SubjectKind.ITEM, SubjectKind.CONCEPT),
-            kinds(SubjectKind.ENTITY, SubjectKind.PROJECTILE, SubjectKind.AREA));
-        add(mappedRules, Set.of(GraftAspect.STICKY, GraftAspect.SLOW),
-            kinds(SubjectKind.BLOCK, SubjectKind.ENTITY, SubjectKind.POTION, SubjectKind.CONCEPT),
-            kinds(SubjectKind.BLOCK, SubjectKind.ENTITY, SubjectKind.PROJECTILE, SubjectKind.AREA));
-        add(mappedRules, Set.of(GraftAspect.SLIPPERY),
-            kinds(SubjectKind.BLOCK, SubjectKind.CONCEPT),
-            kinds(SubjectKind.BLOCK, SubjectKind.AREA, SubjectKind.ENTITY));
-        add(mappedRules, Set.of(GraftAspect.BOUNCE),
-            kinds(SubjectKind.BLOCK, SubjectKind.ENTITY, SubjectKind.ITEM, SubjectKind.CONCEPT),
-            kinds(SubjectKind.BLOCK, SubjectKind.ENTITY, SubjectKind.PROJECTILE));
-        add(mappedRules, Set.of(GraftAspect.HEAL, GraftAspect.POISON, GraftAspect.SPEED),
-            kinds(SubjectKind.ENTITY, SubjectKind.POTION, SubjectKind.ITEM, SubjectKind.CONCEPT, SubjectKind.PROJECTILE),
-            kinds(SubjectKind.ENTITY, SubjectKind.PROJECTILE, SubjectKind.AREA));
-        add(mappedRules, Set.of(GraftAspect.OPEN, GraftAspect.POWERED, GraftAspect.EXPLOSIVE),
-            kinds(SubjectKind.BLOCK, SubjectKind.CONTAINER, SubjectKind.ITEM, SubjectKind.CONCEPT),
-            kinds(SubjectKind.BLOCK, SubjectKind.CONTAINER, SubjectKind.PROJECTILE));
-        add(mappedRules, Set.of(GraftAspect.TARGET, GraftAspect.AGGRO, GraftAspect.OWNER, GraftAspect.TETHER),
-            kinds(SubjectKind.ENTITY, SubjectKind.PROJECTILE, SubjectKind.CONCEPT),
-            kinds(SubjectKind.ENTITY, SubjectKind.PROJECTILE, SubjectKind.LOCATION));
-        add(mappedRules, Set.of(GraftAspect.DESTINATION, GraftAspect.RECEIVER, GraftAspect.CONTAINER_LINK, GraftAspect.PAIRED_EXIT),
-            kinds(SubjectKind.CONTAINER, SubjectKind.PROJECTILE, SubjectKind.CONCEPT, SubjectKind.LOCATION, SubjectKind.BLOCK),
-            kinds(SubjectKind.CONTAINER, SubjectKind.BLOCK, SubjectKind.ENTITY, SubjectKind.LOCATION));
-        add(mappedRules, Set.of(GraftAspect.ANCHOR, GraftAspect.ENTRY, GraftAspect.EXIT, GraftAspect.SURFACE, GraftAspect.VOLUME, GraftAspect.PATH_START, GraftAspect.PATH_END, GraftAspect.NEAR, GraftAspect.FAR),
-            kinds(SubjectKind.BLOCK, SubjectKind.LOCATION, SubjectKind.AREA, SubjectKind.CONCEPT),
-            kinds(SubjectKind.BLOCK, SubjectKind.LOCATION, SubjectKind.AREA));
-        add(mappedRules, Set.of(GraftAspect.ON_ENTER, GraftAspect.ON_HIT, GraftAspect.ON_OPEN, GraftAspect.ON_CONSUME, GraftAspect.BEGIN, GraftAspect.END, GraftAspect.RETURN, GraftAspect.REPEAT),
-            kinds(SubjectKind.PROJECTILE, SubjectKind.CONTAINER, SubjectKind.ITEM, SubjectKind.POTION, SubjectKind.LOCATION, SubjectKind.AREA, SubjectKind.CONCEPT),
-            kinds(SubjectKind.PROJECTILE, SubjectKind.CONTAINER, SubjectKind.ITEM, SubjectKind.BLOCK, SubjectKind.LOCATION, SubjectKind.AREA));
+        addStateRules(mappedRules);
+        addBinaryRules(mappedRules, GraftFamily.RELATION, (aspect, source, target) -> new RelationGraftPlanner().plan(aspect, source, target).isPresent());
+        addBinaryRules(mappedRules, GraftFamily.TOPOLOGY, (aspect, source, target) -> new TopologyGraftPlanner().plan(aspect, source, target).isPresent());
+        addBinaryRules(mappedRules, GraftFamily.SEQUENCE, (aspect, source, target) -> new SequenceTamperPlanner().plan(aspect, source, target).isPresent());
         return mappedRules;
     }
 
-    private void add(Map<GraftAspect, CompatibilityRule> mappedRules, Set<GraftAspect> aspects, Set<SubjectKind> sourceKinds, Set<SubjectKind> targetKinds) {
-        CompatibilityRule rule = new CompatibilityRule(sourceKinds, targetKinds);
-        for (GraftAspect aspect : aspects) {
-            mappedRules.put(aspect, rule);
+    private void addStateRules(Map<GraftAspect, CompatibilityRule> mappedRules) {
+        StateTransferPlanner planner = new StateTransferPlanner();
+        for (GraftAspect aspect : GraftAspect.forFamily(GraftFamily.STATE)) {
+            Set<CompatibilityPair> supportedPairs = new HashSet<>();
+            for (SubjectKind targetKind : SubjectKind.values()) {
+                if (planner.plan(aspect, stub(targetKind, aspect)).isEmpty()) {
+                    continue;
+                }
+                for (SubjectKind sourceKind : SubjectKind.values()) {
+                    supportedPairs.add(new CompatibilityPair(sourceKind, targetKind));
+                }
+            }
+            if (!supportedPairs.isEmpty()) {
+                mappedRules.put(aspect, new CompatibilityRule(supportedPairs));
+            }
         }
     }
 
-    private Set<SubjectKind> kinds(SubjectKind first, SubjectKind... remaining) {
-        return Set.copyOf(EnumSet.of(first, remaining));
+    private void addBinaryRules(Map<GraftAspect, CompatibilityRule> mappedRules, GraftFamily family, BinaryPlannerProbe probe) {
+        for (GraftAspect aspect : GraftAspect.forFamily(family)) {
+            Set<CompatibilityPair> supportedPairs = new HashSet<>();
+            for (SubjectKind sourceKind : SubjectKind.values()) {
+                GraftSubject source = stub(sourceKind, aspect);
+                for (SubjectKind targetKind : SubjectKind.values()) {
+                    GraftSubject target = stub(targetKind, aspect);
+                    if (probe.supports(aspect, source, target)) {
+                        supportedPairs.add(new CompatibilityPair(sourceKind, targetKind));
+                    }
+                }
+            }
+            if (!supportedPairs.isEmpty()) {
+                mappedRules.put(aspect, new CompatibilityRule(supportedPairs));
+            }
+        }
     }
 
-    private record CompatibilityRule(Set<SubjectKind> sourceKinds, Set<SubjectKind> targetKinds) {
+    private GraftSubject stub(SubjectKind kind, GraftAspect aspect) {
+        return new GraftSubject("stub:" + kind.name(), kind.name(), kind, Set.of(aspect));
+    }
+
+    @FunctionalInterface
+    private interface BinaryPlannerProbe {
+        boolean supports(GraftAspect aspect, GraftSubject source, GraftSubject target);
+    }
+
+    private record CompatibilityRule(Set<CompatibilityPair> supportedPairs) {
+
+        private CompatibilityRule {
+            supportedPairs = Set.copyOf(supportedPairs);
+        }
+
+        private boolean supportsSource(SubjectKind sourceKind) {
+            return supportedPairs.stream().anyMatch(pair -> pair.sourceKind() == sourceKind);
+        }
+
+        private boolean supports(SubjectKind sourceKind, SubjectKind targetKind) {
+            return supportedPairs.contains(new CompatibilityPair(sourceKind, targetKind));
+        }
+
+        private Set<SubjectKind> targetKinds() {
+            Set<SubjectKind> targetKinds = new HashSet<>();
+            for (CompatibilityPair pair : supportedPairs) {
+                targetKinds.add(pair.targetKind());
+            }
+            return Set.copyOf(targetKinds);
+        }
+    }
+
+    private record CompatibilityPair(SubjectKind sourceKind, SubjectKind targetKind) {
     }
 }

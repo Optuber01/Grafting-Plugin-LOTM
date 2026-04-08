@@ -47,8 +47,8 @@ public enum GraftAspect {
     ON_HIT(GraftFamily.SEQUENCE, "on-hit", "On Hit"),
     ON_OPEN(GraftFamily.SEQUENCE, "on-open", "On Open"),
     ON_CONSUME(GraftFamily.SEQUENCE, "on-consume", "On Consume"),
-    BEGIN(GraftFamily.SEQUENCE, "begin", "Begin"),
-    END(GraftFamily.SEQUENCE, "end", "End"),
+    BEGIN(GraftFamily.TOPOLOGY, "begin", "Begin"),
+    END(GraftFamily.TOPOLOGY, "end", "End"),
     RETURN(GraftFamily.SEQUENCE, "return", "Return"),
     REPEAT(GraftFamily.SEQUENCE, "repeat", "Repeat");
 
