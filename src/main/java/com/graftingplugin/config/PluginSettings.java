@@ -8,7 +8,8 @@ public record PluginSettings(
     String focusName,
     int interactionRange,
     StateTransferSettings stateTransferSettings,
-    RelationGraftSettings relationGraftSettings
+    RelationGraftSettings relationGraftSettings,
+    TopologyGraftSettings topologyGraftSettings
 ) {
 
     public static PluginSettings fromConfig(FileConfiguration config) {
@@ -23,7 +24,8 @@ public record PluginSettings(
             focusName,
             interactionRange,
             StateTransferSettings.fromConfig(config),
-            RelationGraftSettings.fromConfig(config)
+            RelationGraftSettings.fromConfig(config),
+            TopologyGraftSettings.fromConfig(config)
         );
     }
 }

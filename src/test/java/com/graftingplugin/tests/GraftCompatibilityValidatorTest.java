@@ -23,10 +23,15 @@ public final class GraftCompatibilityValidatorTest {
         GraftSubject chest = new GraftSubject("container:chest", "Chest", SubjectKind.CONTAINER, Set.of(GraftAspect.DESTINATION, GraftAspect.CONTAINER_LINK));
         GraftSubject barrel = new GraftSubject("container:barrel", "Barrel", SubjectKind.CONTAINER, Set.of());
         GraftSubject stone = new GraftSubject("block:stone", "Stone", SubjectKind.BLOCK, Set.of());
+        GraftSubject doorway = new GraftSubject("block:oak_door", "Oak Door", SubjectKind.BLOCK, Set.of(GraftAspect.ENTRY, GraftAspect.EXIT));
+        GraftSubject anchor = new GraftSubject("location:test", "Anchor", SubjectKind.LOCATION, Set.of(GraftAspect.ANCHOR));
 
         List<GraftAspect> stateAspects = validator.compatibleSourceAspects(GraftFamily.STATE, sun);
         if (!stateAspects.equals(List.of(GraftAspect.LIGHT, GraftAspect.HEAT, GraftAspect.IGNITE))) {
             throw new AssertionError("Unexpected state aspect list: " + stateAspects);
+        }
+        if (!validator.compatibleSourceAspects(GraftFamily.TOPOLOGY, doorway).contains(GraftAspect.ENTRY)) {
+            throw new AssertionError("Topology source aspects did not include entry");
         }
         if (!validator.compatibleSourceAspects(GraftFamily.STATE, beginning).isEmpty()) {
             throw new AssertionError("Beginning should not expose state aspects");
@@ -42,6 +47,9 @@ public final class GraftCompatibilityValidatorTest {
         }
         if (!validator.validateTarget(chest, GraftAspect.DESTINATION, barrel).success()) {
             throw new AssertionError("Destination should validate against a container target");
+        }
+        if (!validator.validateTarget(doorway, GraftAspect.ENTRY, anchor).success()) {
+            throw new AssertionError("Entry should validate against a location target");
         }
     }
 }

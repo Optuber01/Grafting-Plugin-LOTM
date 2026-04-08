@@ -10,7 +10,8 @@ public final class TestHarness {
         run("GraftCompatibilityValidatorTest", GraftCompatibilityValidatorTest::run);
         run("StateTransferPlannerTest", StateTransferPlannerTest::run);
         run("RelationGraftPlannerTest", RelationGraftPlannerTest::run);
-        System.out.println("All milestone-4 tests passed.");
+        run("TopologyGraftPlannerTest", TopologyGraftPlannerTest::run);
+        System.out.println("All milestone-5 tests passed.");
     }
 
     private static void run(String name, Runnable test) {

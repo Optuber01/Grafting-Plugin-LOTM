@@ -22,6 +22,10 @@ relation-graft:
   tether-refresh-ticks: 2
   tether-strength: 0.18
   tether-slack-distance: 2.0
+topology-graft:
+  duration-seconds: 30
+  activation-radius: 1.35
+  activation-cooldown-ticks: 20
 concepts:
   sun:
     name: Sun

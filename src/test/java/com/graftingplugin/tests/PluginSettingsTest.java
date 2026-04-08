@@ -31,6 +31,9 @@ public final class PluginSettingsTest {
         config.set("relation-graft.tether-refresh-ticks", 4);
         config.set("relation-graft.tether-strength", 0.25D);
         config.set("relation-graft.tether-slack-distance", 3.5D);
+        config.set("topology-graft.duration-seconds", 27);
+        config.set("topology-graft.activation-radius", 1.75D);
+        config.set("topology-graft.activation-cooldown-ticks", 14);
 
         PluginSettings settings = PluginSettings.fromConfig(config);
 
@@ -55,6 +58,12 @@ public final class PluginSettingsTest {
         if (Math.abs(settings.relationGraftSettings().projectileTurnStrength() - 0.45D) > 0.0001D
             || Math.abs(settings.relationGraftSettings().tetherSlackDistance() - 3.5D) > 0.0001D) {
             throw new AssertionError("Relation graft scalar settings were not loaded correctly");
+        }
+        if (settings.topologyGraftSettings().durationTicks() != 540 || settings.topologyGraftSettings().activationCooldownTicks() != 14) {
+            throw new AssertionError("Topology graft timing settings were not loaded correctly");
+        }
+        if (Math.abs(settings.topologyGraftSettings().activationRadius() - 1.75D) > 0.0001D) {
+            throw new AssertionError("Topology graft activation radius was not loaded correctly");
         }
     }
 }

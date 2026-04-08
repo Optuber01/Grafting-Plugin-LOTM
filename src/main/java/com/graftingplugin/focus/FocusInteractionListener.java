@@ -99,6 +99,7 @@ public final class FocusInteractionListener implements Listener {
         switch (session.family()) {
             case STATE -> applyStateTransfer(player, clickedBlock, clickedEntity);
             case RELATION -> applyRelationGraft(player, clickedBlock, clickedEntity);
+            case TOPOLOGY -> applyTopologyGraft(player, clickedBlock, clickedEntity);
             default -> plugin.messages().send(player, "family-runtime-pending", "family", session.family().displayName());
         }
     }
@@ -165,6 +166,29 @@ public final class FocusInteractionListener implements Listener {
             return;
         }
         plugin.relationGraftService().applyToBlock(player, session.source(), session.sourceReference(), session.selectedAspect(), focusTarget.block());
+    }
+
+    private void applyTopologyGraft(Player player, Block clickedBlock, Entity clickedEntity) {
+        CastSession session = plugin.castSessionManager().session(player.getUniqueId());
+        if (clickedBlock != null) {
+            plugin.topologyGraftService().applyToBlock(player, session.source(), session.sourceReference(), session.selectedAspect(), clickedBlock);
+            return;
+        }
+        if (clickedEntity != null) {
+            plugin.topologyGraftService().applyToLocation(player, session.source(), session.sourceReference(), session.selectedAspect(), clickedEntity.getLocation().add(0.0D, clickedEntity.getHeight() * 0.5D, 0.0D));
+            return;
+        }
+
+        FocusTarget focusTarget = resolveLookTarget(player);
+        if (focusTarget == null) {
+            plugin.messages().send(player, "no-target-found");
+            return;
+        }
+        if (focusTarget.entity() != null) {
+            plugin.topologyGraftService().applyToLocation(player, session.source(), session.sourceReference(), session.selectedAspect(), focusTarget.entity().getLocation().add(0.0D, focusTarget.entity().getHeight() * 0.5D, 0.0D));
+            return;
+        }
+        plugin.topologyGraftService().applyToBlock(player, session.source(), session.sourceReference(), session.selectedAspect(), focusTarget.block());
     }
 
     private ResolvedSource resolveConcreteSource(Player player, Block clickedBlock, Entity clickedEntity) {
