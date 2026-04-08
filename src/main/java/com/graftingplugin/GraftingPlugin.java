@@ -77,6 +77,24 @@ public final class GraftingPlugin extends JavaPlugin {
     }
 
     public void reloadPluginState() {
+        if (sequenceTamperService != null) {
+            sequenceTamperService.shutdown();
+        }
+        if (topologyGraftService != null) {
+            topologyGraftService.shutdown();
+        }
+        if (relationGraftService != null) {
+            relationGraftService.shutdown();
+        }
+        if (stateTransferService != null) {
+            stateTransferService.shutdown();
+        }
+        if (castSessionManager != null) {
+            castSessionManager.clearAll();
+        }
+        if (activeGraftRegistry != null) {
+            activeGraftRegistry.clear();
+        }
         reloadConfig();
         this.settings = PluginSettings.fromConfig(getConfig());
         if (this.messages == null) {
@@ -96,8 +114,6 @@ public final class GraftingPlugin extends JavaPlugin {
         }
         if (this.activeGraftRegistry == null) {
             this.activeGraftRegistry = new ActiveGraftRegistry();
-        } else {
-            this.activeGraftRegistry.clear();
         }
         if (this.stateTransferPlanner == null) {
             this.stateTransferPlanner = new StateTransferPlanner();

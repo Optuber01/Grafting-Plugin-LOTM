@@ -33,8 +33,8 @@ public final class StateTransferService implements Listener {
 
     private final GraftingPlugin plugin;
     private final StateTransferPlanner planner;
-    private final Map<UUID, ProjectilePayload> projectilePayloads = new ConcurrentHashMap<>();
-    private final Map<UUID, Integer> projectileBounces = new ConcurrentHashMap<>();
+    private final Map<UUID, ActiveProjectilePayload> projectilePayloads = new ConcurrentHashMap<>();
+    private final Map<UUID, ActiveProjectileBounce> projectileBounces = new ConcurrentHashMap<>();
     private final Set<UUID> bouncingEntities = ConcurrentHashMap.newKeySet();
     private final Map<UUID, ActiveBounceEffect> activeBounceEffects = new ConcurrentHashMap<>();
     private final Map<UUID, ActiveField> activeFields = new ConcurrentHashMap<>();
@@ -46,7 +46,19 @@ public final class StateTransferService implements Listener {
     }
 
     public void shutdown() {
-        for (BukkitTask task : activeTasks) {
+        for (ActiveProjectilePayload payload : Set.copyOf(projectilePayloads.values())) {
+            clearProjectilePayload(payload.trackingId());
+        }
+        for (ActiveProjectileBounce bounce : Set.copyOf(projectileBounces.values())) {
+            clearProjectileBounce(bounce.trackingId());
+        }
+        for (UUID trackingId : Set.copyOf(activeBounceEffects.keySet())) {
+            clearBounceEffect(trackingId);
+        }
+        for (UUID trackingId : Set.copyOf(activeFields.keySet())) {
+            clearField(trackingId);
+        }
+        for (BukkitTask task : Set.copyOf(activeTasks)) {
             task.cancel();
         }
         activeTasks.clear();
@@ -99,8 +111,8 @@ public final class StateTransferService implements Listener {
 
         boolean success = switch (plan.mode()) {
             case PROJECTILE_TRAIT -> applyProjectileTrait(aspect, projectile);
-            case PROJECTILE_PAYLOAD -> applyProjectilePayload(aspect, projectile);
-            case PROJECTILE_BOUNCE -> applyProjectileBounce(projectile);
+            case PROJECTILE_PAYLOAD -> applyProjectilePayload(caster, source, aspect, target, projectile);
+            case PROJECTILE_BOUNCE -> applyProjectileBounce(caster, source, aspect, target, projectile);
             default -> false;
         };
         if (success) {
@@ -169,11 +181,13 @@ public final class StateTransferService implements Listener {
         if (!(event.getDamager() instanceof Projectile projectile)) {
             return;
         }
-        ProjectilePayload payload = projectilePayloads.remove(projectile.getUniqueId());
+        ActiveProjectilePayload payload = projectilePayloads.remove(projectile.getUniqueId());
         if (payload == null || !(event.getEntity() instanceof LivingEntity livingEntity)) {
             return;
         }
-        applyProjectilePayload(livingEntity, payload);
+        plugin.activeGraftRegistry().unregister(payload.trackingId());
+        cancelTrackedTask(payload.cleanupTask());
+        applyProjectilePayload(livingEntity, payload.aspect());
     }
 
     @EventHandler(ignoreCancelled = true)
@@ -184,15 +198,16 @@ public final class StateTransferService implements Listener {
         }
 
         if (event.getHitEntity() == null) {
-            projectilePayloads.remove(projectile.getUniqueId());
+            clearProjectilePayloadForProjectile(projectile.getUniqueId());
         }
 
-        Integer remainingBounces = projectileBounces.get(projectile.getUniqueId());
-        if (remainingBounces == null) {
+        ActiveProjectileBounce bounce = projectileBounces.get(projectile.getUniqueId());
+        if (bounce == null) {
             return;
         }
+        int remainingBounces = bounce.remainingBounces();
         if (remainingBounces <= 0) {
-            projectileBounces.remove(projectile.getUniqueId());
+            clearProjectileBounce(bounce.trackingId());
             return;
         }
 
@@ -213,24 +228,26 @@ public final class StateTransferService implements Listener {
         reflected.multiply(0.8D);
 
         if (projectile instanceof AbstractArrow arrow) {
+            UUID previousProjectileId = projectile.getUniqueId();
             Location spawnLocation = projectile.getLocation().add(reflected.clone().normalize().multiply(0.2D));
             AbstractArrow bouncedArrow = projectile.getWorld().spawnArrow(spawnLocation, reflected, (float) reflected.length(), 0.0F);
             bouncedArrow.setShooter(arrow.getShooter());
             bouncedArrow.setCritical(arrow.isCritical());
             bouncedArrow.setPickupStatus(arrow.getPickupStatus());
             bouncedArrow.setGlowing(arrow.isGlowing());
-            ProjectilePayload payload = projectilePayloads.remove(projectile.getUniqueId());
+            ActiveProjectilePayload payload = projectilePayloads.remove(previousProjectileId);
             if (payload != null) {
                 projectilePayloads.put(bouncedArrow.getUniqueId(), payload);
             }
-            projectileBounces.put(bouncedArrow.getUniqueId(), remainingBounces - 1);
+            projectileBounces.remove(previousProjectileId);
+            projectileBounces.put(bouncedArrow.getUniqueId(), bounce.withRemainingBounces(remainingBounces - 1));
             projectile.remove();
         } else if (projectile.isValid()) {
             projectile.teleport(projectile.getLocation().add(reflected.clone().normalize().multiply(0.3D)));
             projectile.setVelocity(reflected);
-            projectileBounces.put(projectile.getUniqueId(), remainingBounces - 1);
+            projectileBounces.put(projectile.getUniqueId(), bounce.withRemainingBounces(remainingBounces - 1));
         } else {
-            projectileBounces.remove(projectile.getUniqueId());
+            clearProjectileBounce(bounce.trackingId());
         }
     }
 
@@ -335,22 +352,34 @@ public final class StateTransferService implements Listener {
         };
     }
 
-    private boolean applyProjectilePayload(GraftAspect aspect, Projectile projectile) {
-        projectilePayloads.put(projectile.getUniqueId(), new ProjectilePayload(aspect));
+    private boolean applyProjectilePayload(Player caster, GraftSubject source, GraftAspect aspect, GraftSubject target, Projectile projectile) {
+        clearProjectilePayloadForProjectile(projectile.getUniqueId());
+        int durationTicks = plugin.settings().stateTransferSettings().effectDurationTicks();
+        UUID trackingId = UUID.randomUUID();
+        BukkitTask cleanupTask = plugin.getServer().getScheduler().runTaskLater(plugin, () -> clearProjectilePayload(trackingId), durationTicks);
+        activeTasks.add(cleanupTask);
+        projectilePayloads.put(projectile.getUniqueId(), new ActiveProjectilePayload(trackingId, aspect, cleanupTask));
         if (aspect == GraftAspect.IGNITE || aspect == GraftAspect.HEAT) {
             projectile.setFireTicks(plugin.settings().stateTransferSettings().igniteFireTicks());
         }
+        registerActive(caster.getUniqueId(), trackingId, aspect.displayName(), source.displayName(), target.displayName(), durationTicks, () -> clearProjectilePayload(trackingId));
         return true;
     }
 
-    private boolean applyProjectileBounce(Projectile projectile) {
-        projectileBounces.put(projectile.getUniqueId(), plugin.settings().stateTransferSettings().bounceCount());
+    private boolean applyProjectileBounce(Player caster, GraftSubject source, GraftAspect aspect, GraftSubject target, Projectile projectile) {
+        clearProjectileBounceForProjectile(projectile.getUniqueId());
+        int durationTicks = plugin.settings().stateTransferSettings().effectDurationTicks();
+        UUID trackingId = UUID.randomUUID();
+        BukkitTask cleanupTask = plugin.getServer().getScheduler().runTaskLater(plugin, () -> clearProjectileBounce(trackingId), durationTicks);
+        activeTasks.add(cleanupTask);
+        projectileBounces.put(projectile.getUniqueId(), new ActiveProjectileBounce(trackingId, plugin.settings().stateTransferSettings().bounceCount(), projectile.isGlowing(), cleanupTask));
         projectile.setGlowing(true);
+        registerActive(caster.getUniqueId(), trackingId, aspect.displayName(), source.displayName(), target.displayName(), durationTicks, () -> clearProjectileBounce(trackingId));
         return true;
     }
 
-    private void applyProjectilePayload(LivingEntity target, ProjectilePayload payload) {
-        switch (payload.aspect()) {
+    private void applyProjectilePayload(LivingEntity target, GraftAspect aspect) {
+        switch (aspect) {
             case POISON -> target.addPotionEffect(new PotionEffect(PotionEffectType.POISON, plugin.settings().stateTransferSettings().effectDurationTicks(), 0, true, true, true));
             case IGNITE -> target.setFireTicks(Math.max(target.getFireTicks(), plugin.settings().stateTransferSettings().igniteFireTicks()));
             case HEAT -> {
@@ -441,6 +470,76 @@ public final class StateTransferService implements Listener {
         }
     }
 
+    private void clearProjectilePayloadForProjectile(UUID projectileId) {
+        ActiveProjectilePayload active = projectilePayloads.get(projectileId);
+        if (active == null) {
+            return;
+        }
+        clearProjectilePayload(active.trackingId());
+    }
+
+    private void clearProjectilePayload(UUID trackingId) {
+        UUID projectileId = null;
+        ActiveProjectilePayload active = null;
+        for (Map.Entry<UUID, ActiveProjectilePayload> entry : projectilePayloads.entrySet()) {
+            if (entry.getValue().trackingId().equals(trackingId)) {
+                projectileId = entry.getKey();
+                active = entry.getValue();
+                break;
+            }
+        }
+        if (projectileId != null) {
+            projectilePayloads.remove(projectileId);
+        }
+        plugin.activeGraftRegistry().unregister(trackingId);
+        if (active != null) {
+            cancelTrackedTask(active.cleanupTask());
+        }
+    }
+
+    private void clearProjectileBounceForProjectile(UUID projectileId) {
+        ActiveProjectileBounce active = projectileBounces.get(projectileId);
+        if (active == null) {
+            return;
+        }
+        clearProjectileBounce(active.trackingId());
+    }
+
+    private void clearProjectileBounce(UUID trackingId) {
+        UUID projectileId = null;
+        ActiveProjectileBounce active = null;
+        for (Map.Entry<UUID, ActiveProjectileBounce> entry : projectileBounces.entrySet()) {
+            if (entry.getValue().trackingId().equals(trackingId)) {
+                projectileId = entry.getKey();
+                active = entry.getValue();
+                break;
+            }
+        }
+        if (projectileId != null) {
+            projectileBounces.remove(projectileId);
+        }
+        plugin.activeGraftRegistry().unregister(trackingId);
+        if (active == null) {
+            return;
+        }
+        cancelTrackedTask(active.cleanupTask());
+        if (projectileId == null) {
+            return;
+        }
+        Entity entity = plugin.getServer().getEntity(projectileId);
+        if (entity instanceof Projectile projectile && projectile.isValid()) {
+            projectile.setGlowing(active.wasGlowing());
+        }
+    }
+
+    private void cancelTrackedTask(BukkitTask task) {
+        if (task == null) {
+            return;
+        }
+        task.cancel();
+        activeTasks.remove(task);
+    }
+
     private void clearBounceEffect(UUID trackingId) {
         ActiveBounceEffect active = activeBounceEffects.remove(trackingId);
         bouncingEntities.remove(trackingId);
@@ -460,7 +559,14 @@ public final class StateTransferService implements Listener {
         }
     }
 
-    private record ProjectilePayload(GraftAspect aspect) {
+    private record ActiveProjectilePayload(UUID trackingId, GraftAspect aspect, BukkitTask cleanupTask) {
+    }
+
+    private record ActiveProjectileBounce(UUID trackingId, int remainingBounces, boolean wasGlowing, BukkitTask cleanupTask) {
+
+        private ActiveProjectileBounce withRemainingBounces(int updatedRemainingBounces) {
+            return new ActiveProjectileBounce(trackingId, updatedRemainingBounces, wasGlowing, cleanupTask);
+        }
     }
 
     private record ActiveBounceEffect(BukkitTask task) {
