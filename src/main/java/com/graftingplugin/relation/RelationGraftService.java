@@ -3,6 +3,7 @@ package com.graftingplugin.relation;
 import com.graftingplugin.GraftingPlugin;
 import com.graftingplugin.aspect.GraftAspect;
 import com.graftingplugin.cast.CastSourceReference;
+import com.graftingplugin.cast.GraftFamily;
 import com.graftingplugin.config.RelationGraftSettings;
 import com.graftingplugin.subject.GraftSubject;
 import com.graftingplugin.validation.GraftCompatibilityResult;
@@ -30,6 +31,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.nio.charset.StandardCharsets;
 
 public final class RelationGraftService implements Listener {
 
@@ -78,9 +80,9 @@ public final class RelationGraftService implements Listener {
         }
 
         boolean success = switch (plan.mode()) {
-            case MOB_AGGRO -> applyAggroRedirect(sourceReference, targetEntity);
-            case PROJECTILE_RETARGET_ENTITY -> applyProjectileRetargetToEntity(sourceReference, targetEntity);
-            case TETHER_ENTITY -> applyTetherToEntity(sourceReference, targetEntity);
+            case MOB_AGGRO -> applyAggroRedirect(caster, source, aspect, sourceReference, targetEntity, target.subject().displayName());
+            case PROJECTILE_RETARGET_ENTITY -> applyProjectileRetargetToEntity(caster, source, aspect, sourceReference, targetEntity, target.subject().displayName());
+            case TETHER_ENTITY -> applyTetherToEntity(caster, source, aspect, sourceReference, targetEntity, target.subject().displayName());
             default -> false;
         };
         if (!success) {
@@ -113,9 +115,9 @@ public final class RelationGraftService implements Listener {
         }
 
         boolean success = switch (plan.mode()) {
-            case PROJECTILE_RETARGET_LOCATION -> applyProjectileRetargetToLocation(sourceReference, target.location());
-            case CONTAINER_ROUTE -> applyContainerRoute(sourceReference, targetBlock);
-            case TETHER_LOCATION -> applyTetherToLocation(sourceReference, target.location());
+            case PROJECTILE_RETARGET_LOCATION -> applyProjectileRetargetToLocation(caster, source, aspect, sourceReference, target.location(), target.subject().displayName());
+            case CONTAINER_ROUTE -> applyContainerRoute(caster, source, aspect, sourceReference, targetBlock, target.subject().displayName());
+            case TETHER_LOCATION -> applyTetherToLocation(caster, source, aspect, sourceReference, target.location(), target.subject().displayName());
             default -> false;
         };
         if (!success) {
@@ -286,7 +288,7 @@ public final class RelationGraftService implements Listener {
         return plan;
     }
 
-    private boolean applyAggroRedirect(CastSourceReference sourceReference, Entity targetEntity) {
+    private boolean applyAggroRedirect(Player caster, GraftSubject source, GraftAspect aspect, CastSourceReference sourceReference, Entity targetEntity, String targetName) {
         Entity sourceEntity = resolveSourceEntity(sourceReference);
         if (!(sourceEntity instanceof Mob mob) || !(targetEntity instanceof LivingEntity livingTarget)) {
             return false;
@@ -318,11 +320,12 @@ public final class RelationGraftService implements Listener {
         }, 0L, settings.aggroRefreshTicks());
         activeTasks.add(taskHolder[0]);
         activeAggroRedirects.put(sourceId, new ActiveAggroRedirect(previousTargetId, taskHolder[0]));
+        registerActive(caster.getUniqueId(), sourceId, aspect.displayName(), source.displayName(), targetName, settings.aggroDurationTicks(), () -> clearAggroRedirect(sourceId, true));
         mob.setTarget(livingTarget);
         return true;
     }
 
-    private boolean applyProjectileRetargetToEntity(CastSourceReference sourceReference, Entity targetEntity) {
+    private boolean applyProjectileRetargetToEntity(Player caster, GraftSubject source, GraftAspect aspect, CastSourceReference sourceReference, Entity targetEntity, String targetName) {
         Entity sourceEntity = resolveSourceEntity(sourceReference);
         if (!(sourceEntity instanceof Projectile projectile) || !targetEntity.isValid()) {
             return false;
@@ -354,11 +357,12 @@ public final class RelationGraftService implements Listener {
         }, 0L, settings.projectileRefreshTicks());
         activeTasks.add(taskHolder[0]);
         activeProjectileRetargets.put(sourceId, new ActiveProjectileRetarget(wasGlowing, taskHolder[0]));
+        registerActive(caster.getUniqueId(), sourceId, aspect.displayName(), source.displayName(), targetName, settings.projectileDurationTicks(), () -> clearProjectileRetarget(sourceId));
         projectile.setGlowing(true);
         return true;
     }
 
-    private boolean applyProjectileRetargetToLocation(CastSourceReference sourceReference, Location location) {
+    private boolean applyProjectileRetargetToLocation(Player caster, GraftSubject source, GraftAspect aspect, CastSourceReference sourceReference, Location location, String targetName) {
         Entity sourceEntity = resolveSourceEntity(sourceReference);
         if (!(sourceEntity instanceof Projectile projectile) || location == null || location.getWorld() == null) {
             return false;
@@ -389,11 +393,12 @@ public final class RelationGraftService implements Listener {
         }, 0L, settings.projectileRefreshTicks());
         activeTasks.add(taskHolder[0]);
         activeProjectileRetargets.put(sourceId, new ActiveProjectileRetarget(wasGlowing, taskHolder[0]));
+        registerActive(caster.getUniqueId(), sourceId, aspect.displayName(), source.displayName(), targetName, settings.projectileDurationTicks(), () -> clearProjectileRetarget(sourceId));
         projectile.setGlowing(true);
         return true;
     }
 
-    private boolean applyContainerRoute(CastSourceReference sourceReference, Block targetBlock) {
+    private boolean applyContainerRoute(Player caster, GraftSubject source, GraftAspect aspect, CastSourceReference sourceReference, Block targetBlock, String targetName) {
         Block sourceBlock = resolveSourceBlock(sourceReference);
         if (sourceBlock == null || !(sourceBlock.getState() instanceof Container)) {
             return false;
@@ -411,13 +416,15 @@ public final class RelationGraftService implements Listener {
         clearContainerRoute(sourceKey);
         Location sourceLocation = sourceBlock.getLocation().toBlockLocation();
         Location targetLocation = targetBlock.getLocation().toBlockLocation();
-        BukkitTask cleanupTask = plugin.getServer().getScheduler().runTaskLater(plugin, () -> clearContainerRoute(sourceKey), plugin.settings().relationGraftSettings().containerDurationTicks());
+        int durationTicks = plugin.settings().relationGraftSettings().containerDurationTicks();
+        BukkitTask cleanupTask = plugin.getServer().getScheduler().runTaskLater(plugin, () -> clearContainerRoute(sourceKey), durationTicks);
         activeTasks.add(cleanupTask);
         activeContainerRoutes.put(sourceKey, new ActiveContainerRoute(sourceKey, sourceLocation, targetLocation, cleanupTask));
+        registerActive(caster.getUniqueId(), UUID.nameUUIDFromBytes(sourceKey.getBytes(StandardCharsets.UTF_8)), aspect.displayName(), source.displayName(), targetName, durationTicks, () -> clearContainerRoute(sourceKey));
         return true;
     }
 
-    private boolean applyTetherToEntity(CastSourceReference sourceReference, Entity targetEntity) {
+    private boolean applyTetherToEntity(Player caster, GraftSubject source, GraftAspect aspect, CastSourceReference sourceReference, Entity targetEntity, String targetName) {
         Entity sourceEntity = resolveSourceEntity(sourceReference);
         if (sourceEntity == null || !sourceEntity.isValid() || !targetEntity.isValid()) {
             return false;
@@ -447,10 +454,11 @@ public final class RelationGraftService implements Listener {
         }, 0L, settings.tetherRefreshTicks());
         activeTasks.add(taskHolder[0]);
         activeTethers.put(sourceId, new ActiveTether(taskHolder[0]));
+        registerActive(caster.getUniqueId(), sourceId, aspect.displayName(), source.displayName(), targetName, settings.tetherDurationTicks(), () -> clearTether(sourceId));
         return true;
     }
 
-    private boolean applyTetherToLocation(CastSourceReference sourceReference, Location location) {
+    private boolean applyTetherToLocation(Player caster, GraftSubject source, GraftAspect aspect, CastSourceReference sourceReference, Location location, String targetName) {
         Entity sourceEntity = resolveSourceEntity(sourceReference);
         if (sourceEntity == null || !sourceEntity.isValid() || location == null || location.getWorld() == null) {
             return false;
@@ -479,7 +487,23 @@ public final class RelationGraftService implements Listener {
         }, 0L, settings.tetherRefreshTicks());
         activeTasks.add(taskHolder[0]);
         activeTethers.put(sourceId, new ActiveTether(taskHolder[0]));
+        registerActive(caster.getUniqueId(), sourceId, aspect.displayName(), source.displayName(), targetName, settings.tetherDurationTicks(), () -> clearTether(sourceId));
         return true;
+    }
+
+    private void registerActive(UUID ownerId, UUID trackingId, String aspectName, String sourceName, String targetName, int durationTicks, Runnable cleanupAction) {
+        for (Runnable cleanup : plugin.activeGraftRegistry().register(
+            trackingId,
+            ownerId,
+            GraftFamily.RELATION,
+            aspectName,
+            sourceName,
+            targetName,
+            durationTicks,
+            cleanupAction
+        )) {
+            cleanup.run();
+        }
     }
 
     private void steerProjectile(Projectile projectile, Location targetLocation, double turnStrength) {
@@ -591,6 +615,7 @@ public final class RelationGraftService implements Listener {
         if (active == null) {
             return;
         }
+        plugin.activeGraftRegistry().unregister(sourceId);
         cancelTrackedTask(active.task());
         if (!restorePreviousTarget) {
             return;
@@ -613,6 +638,7 @@ public final class RelationGraftService implements Listener {
         if (active == null) {
             return;
         }
+        plugin.activeGraftRegistry().unregister(sourceId);
         cancelTrackedTask(active.task());
         Entity sourceEntity = plugin.getServer().getEntity(sourceId);
         if (sourceEntity instanceof Projectile projectile && projectile.isValid()) {
@@ -625,6 +651,7 @@ public final class RelationGraftService implements Listener {
         if (active == null) {
             return;
         }
+        plugin.activeGraftRegistry().unregister(sourceId);
         cancelTrackedTask(active.task());
     }
 
@@ -633,6 +660,7 @@ public final class RelationGraftService implements Listener {
         if (active == null) {
             return;
         }
+        plugin.activeGraftRegistry().unregister(UUID.nameUUIDFromBytes(sourceKey.getBytes(StandardCharsets.UTF_8)));
         cancelTrackedTask(active.cleanupTask());
     }
 

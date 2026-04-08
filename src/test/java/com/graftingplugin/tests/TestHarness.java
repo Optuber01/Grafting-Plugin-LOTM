@@ -3,6 +3,7 @@ package com.graftingplugin.tests;
 public final class TestHarness {
 
     public static void main(String[] args) {
+        run("ActiveGraftRegistryTest", ActiveGraftRegistryTest::run);
         run("AspectCatalogTest", AspectCatalogTest::run);
         run("ConceptRegistryTest", ConceptRegistryTest::run);
         run("PluginSettingsTest", PluginSettingsTest::run);
@@ -12,7 +13,7 @@ public final class TestHarness {
         run("RelationGraftPlannerTest", RelationGraftPlannerTest::run);
         run("TopologyGraftPlannerTest", TopologyGraftPlannerTest::run);
         run("SequenceTamperPlannerTest", SequenceTamperPlannerTest::run);
-        System.out.println("All milestone-6 tests passed.");
+        System.out.println("All milestone-7 tests passed.");
     }
 
     private static void run(String name, Runnable test) {

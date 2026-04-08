@@ -33,6 +33,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.nio.charset.StandardCharsets;
 
 public final class SequenceTamperService implements Listener {
 
@@ -73,7 +74,7 @@ public final class SequenceTamperService implements Listener {
         }
 
         boolean success = switch (plan.mode()) {
-            case PROJECTILE_HIT_PAYLOAD -> applyProjectileHitPayload(source, targetProjectile);
+            case PROJECTILE_HIT_PAYLOAD -> applyProjectileHitPayload(caster, source, aspect, target, targetProjectile);
             default -> false;
         };
         if (!success) {
@@ -106,7 +107,7 @@ public final class SequenceTamperService implements Listener {
         }
 
         boolean success = switch (plan.mode()) {
-            case CONTAINER_OPEN_RELAY -> applyContainerOpenRelay(caster, source, sourceReference, targetBlock);
+            case CONTAINER_OPEN_RELAY -> applyContainerOpenRelay(caster, source, sourceReference, aspect, target, targetBlock);
             default -> false;
         };
         if (!success) {
@@ -134,6 +135,7 @@ public final class SequenceTamperService implements Listener {
             return;
         }
 
+        plugin.activeGraftRegistry().unregister(projectileId);
         cancelTrackedTask(active.cleanupTask());
         if (event.getEntity().isValid()) {
             event.getEntity().setGlowing(active.wasGlowing());
@@ -188,7 +190,7 @@ public final class SequenceTamperService implements Listener {
         return plan;
     }
 
-    private boolean applyProjectileHitPayload(GraftSubject source, Projectile targetProjectile) {
+    private boolean applyProjectileHitPayload(Player caster, GraftSubject source, GraftAspect aspect, GraftSubject target, Projectile targetProjectile) {
         Set<GraftAspect> payloadAspects = transferablePayloadAspects(source);
         if (payloadAspects.isEmpty()) {
             return false;
@@ -201,11 +203,23 @@ public final class SequenceTamperService implements Listener {
         BukkitTask cleanupTask = plugin.getServer().getScheduler().runTaskLater(plugin, () -> clearHitPayload(projectileId), settings.payloadDurationTicks());
         activeTasks.add(cleanupTask);
         activeHitPayloads.put(projectileId, new ActiveHitPayload(payloadAspects, wasGlowing, cleanupTask));
+        for (Runnable cleanup : plugin.activeGraftRegistry().register(
+            projectileId,
+            caster.getUniqueId(),
+            GraftFamily.SEQUENCE,
+            aspect.displayName(),
+            source.displayName(),
+            target.displayName(),
+            settings.payloadDurationTicks(),
+            () -> clearHitPayload(projectileId)
+        )) {
+            cleanup.run();
+        }
         targetProjectile.setGlowing(true);
         return true;
     }
 
-    private boolean applyContainerOpenRelay(Player caster, GraftSubject source, CastSourceReference sourceReference, Block targetBlock) {
+    private boolean applyContainerOpenRelay(Player caster, GraftSubject source, CastSourceReference sourceReference, GraftAspect aspect, GraftSubject target, Block targetBlock) {
         if (!(targetBlock.getState() instanceof Container)) {
             return false;
         }
@@ -222,11 +236,25 @@ public final class SequenceTamperService implements Listener {
         }
 
         String targetKey = locationKey(targetLocation);
+        UUID trackingId = UUID.nameUUIDFromBytes(targetKey.getBytes(StandardCharsets.UTF_8));
         clearOpenRelay(targetKey);
 
-        BukkitTask cleanupTask = plugin.getServer().getScheduler().runTaskLater(plugin, () -> clearOpenRelay(targetKey), plugin.settings().sequenceTamperSettings().openRelayDurationTicks());
+        int durationTicks = plugin.settings().sequenceTamperSettings().openRelayDurationTicks();
+        BukkitTask cleanupTask = plugin.getServer().getScheduler().runTaskLater(plugin, () -> clearOpenRelay(targetKey), durationTicks);
         activeTasks.add(cleanupTask);
         activeOpenRelays.put(targetKey, new ActiveOpenRelay(targetKey, relaySource.anchor(), relaySource.blockLocation(), targetLocation, cleanupTask));
+        for (Runnable cleanup : plugin.activeGraftRegistry().register(
+            trackingId,
+            caster.getUniqueId(),
+            GraftFamily.SEQUENCE,
+            aspect.displayName(),
+            source.displayName(),
+            target.displayName(),
+            durationTicks,
+            () -> clearOpenRelay(targetKey)
+        )) {
+            cleanup.run();
+        }
         return true;
     }
 
@@ -387,6 +415,7 @@ public final class SequenceTamperService implements Listener {
         if (active == null) {
             return;
         }
+        plugin.activeGraftRegistry().unregister(projectileId);
         cancelTrackedTask(active.cleanupTask());
         Entity sourceEntity = plugin.getServer().getEntity(projectileId);
         if (sourceEntity instanceof Projectile projectile && projectile.isValid()) {
@@ -399,6 +428,7 @@ public final class SequenceTamperService implements Listener {
         if (active == null) {
             return;
         }
+        plugin.activeGraftRegistry().unregister(UUID.nameUUIDFromBytes(targetKey.getBytes(StandardCharsets.UTF_8)));
         cancelTrackedTask(active.cleanupTask());
     }
 

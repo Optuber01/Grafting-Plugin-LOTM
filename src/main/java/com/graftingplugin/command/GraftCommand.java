@@ -1,6 +1,7 @@
 package com.graftingplugin.command;
 
 import com.graftingplugin.GraftingPlugin;
+import com.graftingplugin.active.ActiveGraftSnapshot;
 import com.graftingplugin.aspect.GraftAspect;
 import com.graftingplugin.cast.CastSession;
 import com.graftingplugin.cast.GraftFamily;
@@ -38,7 +39,7 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
             case "aspect" -> handleAspect(sender, args);
             case "clear" -> handleClear(sender);
             case "inspect" -> handleInspect(sender);
-            case "active" -> sender.sendMessage("Active graft tracking comes online with the runtime families.");
+            case "active" -> handleActive(sender);
             case "givefocus" -> handleGiveFocus(sender, args);
             case "reload" -> handleReload(sender);
             default -> sendUsage(sender);
@@ -128,6 +129,28 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
         if (session.source() != null) {
             List<GraftAspect> compatibleAspects = plugin.compatibilityValidator().compatibleSourceAspects(session.family(), session.source());
             player.sendMessage("Available aspects: " + (compatibleAspects.isEmpty() ? "none" : formatAspectList(compatibleAspects)));
+        }
+    }
+
+    private void handleActive(CommandSender sender) {
+        Player player = requirePlayer(sender);
+        if (player == null) {
+            return;
+        }
+
+        List<ActiveGraftSnapshot> activeGrafts = plugin.activeGraftRegistry().activeFor(player.getUniqueId());
+        if (activeGrafts.isEmpty()) {
+            player.sendMessage("No active grafts.");
+            return;
+        }
+
+        player.sendMessage("Active grafts:");
+        for (ActiveGraftSnapshot snapshot : activeGrafts) {
+            player.sendMessage("- [" + snapshot.family().key() + "] "
+                + snapshot.aspectName()
+                + ": " + snapshot.sourceName()
+                + " -> " + snapshot.targetName()
+                + " (" + snapshot.remainingSeconds() + "s)");
         }
     }
 

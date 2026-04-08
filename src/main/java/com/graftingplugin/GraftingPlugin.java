@@ -1,5 +1,6 @@
 package com.graftingplugin;
 
+import com.graftingplugin.active.ActiveGraftRegistry;
 import com.graftingplugin.aspect.AspectCatalog;
 import com.graftingplugin.cast.CastSessionManager;
 import com.graftingplugin.cast.CastSelectionService;
@@ -33,6 +34,7 @@ public final class GraftingPlugin extends JavaPlugin {
     private SubjectResolver subjectResolver;
     private GraftCompatibilityValidator compatibilityValidator;
     private CastSelectionService castSelectionService;
+    private ActiveGraftRegistry activeGraftRegistry;
     private StateTransferPlanner stateTransferPlanner;
     private StateTransferService stateTransferService;
     private RelationGraftPlanner relationGraftPlanner;
@@ -69,6 +71,9 @@ public final class GraftingPlugin extends JavaPlugin {
         if (castSessionManager != null) {
             castSessionManager.clearAll();
         }
+        if (activeGraftRegistry != null) {
+            activeGraftRegistry.clear();
+        }
     }
 
     public void reloadPluginState() {
@@ -88,6 +93,11 @@ public final class GraftingPlugin extends JavaPlugin {
         this.compatibilityValidator = new GraftCompatibilityValidator();
         if (this.castSelectionService == null) {
             this.castSelectionService = new CastSelectionService(this);
+        }
+        if (this.activeGraftRegistry == null) {
+            this.activeGraftRegistry = new ActiveGraftRegistry();
+        } else {
+            this.activeGraftRegistry.clear();
         }
         if (this.stateTransferPlanner == null) {
             this.stateTransferPlanner = new StateTransferPlanner();
@@ -170,6 +180,10 @@ public final class GraftingPlugin extends JavaPlugin {
 
     public CastSelectionService castSelectionService() {
         return castSelectionService;
+    }
+
+    public ActiveGraftRegistry activeGraftRegistry() {
+        return activeGraftRegistry;
     }
 
     public StateTransferPlanner stateTransferPlanner() {

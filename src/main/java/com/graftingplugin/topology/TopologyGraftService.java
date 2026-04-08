@@ -3,6 +3,7 @@ package com.graftingplugin.topology;
 import com.graftingplugin.GraftingPlugin;
 import com.graftingplugin.aspect.GraftAspect;
 import com.graftingplugin.cast.CastSourceReference;
+import com.graftingplugin.cast.GraftFamily;
 import com.graftingplugin.config.TopologyGraftSettings;
 import com.graftingplugin.subject.GraftSubject;
 import com.graftingplugin.validation.GraftCompatibilityResult;
@@ -215,6 +216,18 @@ public final class TopologyGraftService implements Listener {
             target.subject().displayName()
         );
         activeRoutes.put(routeId, route);
+        for (Runnable cleanup : plugin.activeGraftRegistry().register(
+            routeId,
+            caster.getUniqueId(),
+            GraftFamily.TOPOLOGY,
+            aspect.displayName(),
+            sourceAnchor.displayName(),
+            target.subject().displayName(),
+            settings.durationTicks(),
+            () -> clearRoute(routeId)
+        )) {
+            cleanup.run();
+        }
 
         sourceAnchor.anchor().getWorld().spawnParticle(Particle.PORTAL, sourceAnchor.anchor(), 20, 0.25D, 0.5D, 0.25D, 0.05D);
         target.anchor().getWorld().spawnParticle(Particle.PORTAL, target.anchor(), 20, 0.25D, 0.5D, 0.25D, 0.05D);
@@ -323,6 +336,7 @@ public final class TopologyGraftService implements Listener {
         if (route == null) {
             return;
         }
+        plugin.activeGraftRegistry().unregister(routeId);
         route.cleanupTask().cancel();
         activeTasks.remove(route.cleanupTask());
     }
