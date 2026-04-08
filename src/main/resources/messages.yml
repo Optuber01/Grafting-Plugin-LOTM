@@ -1,4 +1,10 @@
-mode-set: <gray>Graft mode set to <aqua>{family}</aqua>.</gray>
-concept-armed: <gray>Abstract concept <gold>{concept}</gold> stored as your next source.</gray>
-cast-cleared: <gray>Your stored graft selection has been cleared.</gray>
-focus-given: <gray>You have received a <light_purple>Mystic Focus</light_purple>.</gray>
+mode-set: '<gray>Graft mode set to <aqua>{family}</aqua>.</gray>'
+unknown-concept: '<red>Unknown concept <gold>{concept}</gold>.</red>'
+concept-incompatible: '<red><gold>{concept}</gold> does not expose a <aqua>{family}</aqua> aspect.</red>'
+concept-armed-single: '<gray>Source set to <gold>{concept}</gold> with <aqua>{aspect}</aqua>.</gray>'
+concept-armed-multiple: '<gray>Source set to <gold>{concept}</gold>. Choose a <aqua>{family}</aqua> aspect: <aqua>{aspects}</aqua>.</gray>'
+no-source-selected: '<red>Select a source subject first.</red>'
+invalid-aspect: '<red>Aspect <gold>{aspect}</gold> is not available for the current cast state.</red>'
+aspect-selected: '<gray>Aspect set to <aqua>{aspect}</aqua>.</gray>'
+cast-cleared: '<gray>Your stored graft selection has been cleared.</gray>'
+focus-given: '<gray>You have received a <light_purple>Mystic Focus</light_purple>.</gray>'

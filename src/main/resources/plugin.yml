@@ -8,7 +8,7 @@ authors:
 commands:
   graft:
     description: Core grafting command.
-    usage: /graft mode <state|relation|topology|sequence>
+    usage: /graft <mode|concept|aspect|inspect|clear|active|givefocus|reload>
 permissions:
   grafting.use:
     default: true

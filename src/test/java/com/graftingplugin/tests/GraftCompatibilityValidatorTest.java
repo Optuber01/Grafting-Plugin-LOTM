@@ -1,0 +1,38 @@
+package com.graftingplugin.tests;
+
+import com.graftingplugin.aspect.GraftAspect;
+import com.graftingplugin.cast.GraftFamily;
+import com.graftingplugin.subject.GraftSubject;
+import com.graftingplugin.subject.SubjectKind;
+import com.graftingplugin.validation.GraftCompatibilityValidator;
+
+import java.util.List;
+import java.util.Set;
+
+public final class GraftCompatibilityValidatorTest {
+
+    private GraftCompatibilityValidatorTest() {
+    }
+
+    public static void run() {
+        GraftCompatibilityValidator validator = new GraftCompatibilityValidator();
+        GraftSubject sun = new GraftSubject("concept:sun", "Sun", SubjectKind.CONCEPT, Set.of(GraftAspect.LIGHT, GraftAspect.HEAT, GraftAspect.IGNITE));
+        GraftSubject beginning = new GraftSubject("concept:beginning", "Beginning", SubjectKind.CONCEPT, Set.of(GraftAspect.ENTRY, GraftAspect.PATH_START, GraftAspect.BEGIN));
+        GraftSubject stone = new GraftSubject("block:stone", "Stone", SubjectKind.BLOCK, Set.of());
+        GraftSubject zombie = new GraftSubject("entity:zombie", "Zombie", SubjectKind.ENTITY, Set.of());
+
+        List<GraftAspect> stateAspects = validator.compatibleSourceAspects(GraftFamily.STATE, sun);
+        if (!stateAspects.equals(List.of(GraftAspect.LIGHT, GraftAspect.HEAT, GraftAspect.IGNITE))) {
+            throw new AssertionError("Unexpected state aspect list: " + stateAspects);
+        }
+        if (!validator.compatibleSourceAspects(GraftFamily.STATE, beginning).isEmpty()) {
+            throw new AssertionError("Beginning should not expose state aspects");
+        }
+        if (!validator.validateTarget(sun, GraftAspect.LIGHT, stone).success()) {
+            throw new AssertionError("Sun light should be valid on a block target");
+        }
+        if (validator.validateTarget(beginning, GraftAspect.BEGIN, zombie).success()) {
+            throw new AssertionError("Begin should not validate against an entity target");
+        }
+    }
+}

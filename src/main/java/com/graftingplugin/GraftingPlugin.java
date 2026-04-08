@@ -1,10 +1,14 @@
 package com.graftingplugin;
 
+import com.graftingplugin.aspect.AspectCatalog;
 import com.graftingplugin.cast.CastSessionManager;
 import com.graftingplugin.command.GraftCommand;
+import com.graftingplugin.concept.ConceptRegistry;
 import com.graftingplugin.config.MessageService;
 import com.graftingplugin.config.PluginSettings;
 import com.graftingplugin.focus.FocusItemService;
+import com.graftingplugin.subject.SubjectResolver;
+import com.graftingplugin.validation.GraftCompatibilityValidator;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -14,6 +18,10 @@ public final class GraftingPlugin extends JavaPlugin {
     private MessageService messages;
     private FocusItemService focusItemService;
     private CastSessionManager castSessionManager;
+    private AspectCatalog aspectCatalog;
+    private ConceptRegistry conceptRegistry;
+    private SubjectResolver subjectResolver;
+    private GraftCompatibilityValidator compatibilityValidator;
 
     @Override
     public void onEnable() {
@@ -41,6 +49,10 @@ public final class GraftingPlugin extends JavaPlugin {
         if (this.castSessionManager == null) {
             this.castSessionManager = new CastSessionManager();
         }
+        this.aspectCatalog = new AspectCatalog();
+        this.conceptRegistry = ConceptRegistry.fromConfig(getConfig());
+        this.subjectResolver = new SubjectResolver(aspectCatalog, conceptRegistry);
+        this.compatibilityValidator = new GraftCompatibilityValidator();
     }
 
     private void registerCommands() {
@@ -67,5 +79,21 @@ public final class GraftingPlugin extends JavaPlugin {
 
     public CastSessionManager castSessionManager() {
         return castSessionManager;
+    }
+
+    public AspectCatalog aspectCatalog() {
+        return aspectCatalog;
+    }
+
+    public ConceptRegistry conceptRegistry() {
+        return conceptRegistry;
+    }
+
+    public SubjectResolver subjectResolver() {
+        return subjectResolver;
+    }
+
+    public GraftCompatibilityValidator compatibilityValidator() {
+        return compatibilityValidator;
     }
 }

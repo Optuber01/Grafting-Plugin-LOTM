@@ -2,3 +2,46 @@ focus:
   material: BLAZE_ROD
   name: <light_purple>Mystic Focus</light_purple>
   interaction-range: 8
+concepts:
+  sun:
+    name: Sun
+    aspects:
+      - light
+      - heat
+      - ignite
+  moon:
+    name: Moon
+    aspects:
+      - light
+      - conceal
+  gravity:
+    name: Gravity
+    aspects:
+      - heavy
+      - pull
+  beginning:
+    name: Beginning
+    aspects:
+      - entry
+      - path-start
+      - begin
+  end:
+    name: End
+    aspects:
+      - exit
+      - path-end
+      - end
+  distance:
+    name: Distance
+    aspects:
+      - near
+      - far
+  binding:
+    name: Binding
+    aspects:
+      - tether
+      - anchor
+  concealment:
+    name: Concealment
+    aspects:
+      - conceal

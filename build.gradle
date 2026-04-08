@@ -70,6 +70,7 @@ tasks.named('test') {
 tasks.register('testHarness', JavaExec) {
     group = 'verification'
     description = 'Runs the custom plugin test harness.'
+    dependsOn tasks.named('testClasses')
     classpath = sourceSets.test.runtimeClasspath
     mainClass = 'com.graftingplugin.tests.TestHarness'
     jvmArgs '-ea'
