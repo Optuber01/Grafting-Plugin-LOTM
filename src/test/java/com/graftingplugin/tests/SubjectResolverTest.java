@@ -35,5 +35,10 @@ public final class SubjectResolverTest {
         if (sun.kind() != SubjectKind.CONCEPT || !sun.aspects().contains(GraftAspect.LIGHT)) {
             throw new AssertionError("Sun concept did not resolve correctly: " + sun);
         }
+
+        GraftSubject splashPotion = resolver.resolveItem(Material.SPLASH_POTION).orElseThrow();
+        if (splashPotion.kind() != SubjectKind.POTION || !splashPotion.aspects().contains(GraftAspect.ON_HIT)) {
+            throw new AssertionError("Splash potion did not resolve correctly: " + splashPotion);
+        }
     }
 }

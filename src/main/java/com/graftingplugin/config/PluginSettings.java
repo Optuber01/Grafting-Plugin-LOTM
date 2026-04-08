@@ -9,7 +9,8 @@ public record PluginSettings(
     int interactionRange,
     StateTransferSettings stateTransferSettings,
     RelationGraftSettings relationGraftSettings,
-    TopologyGraftSettings topologyGraftSettings
+    TopologyGraftSettings topologyGraftSettings,
+    SequenceTamperSettings sequenceTamperSettings
 ) {
 
     public static PluginSettings fromConfig(FileConfiguration config) {
@@ -25,7 +26,8 @@ public record PluginSettings(
             interactionRange,
             StateTransferSettings.fromConfig(config),
             RelationGraftSettings.fromConfig(config),
-            TopologyGraftSettings.fromConfig(config)
+            TopologyGraftSettings.fromConfig(config),
+            SequenceTamperSettings.fromConfig(config)
         );
     }
 }

@@ -108,9 +108,7 @@ public final class AspectCatalog {
         }
 
         EnumSet<GraftAspect> aspects = EnumSet.noneOf(GraftAspect.class);
-        if (itemStack.getType() == Material.TNT) {
-            aspects.add(GraftAspect.EXPLOSIVE);
-        }
+        aspects.addAll(itemAspects(itemStack.getType()));
         if (itemStack.containsEnchantment(Enchantment.FIRE_ASPECT) || itemStack.containsEnchantment(Enchantment.FLAME)) {
             aspects.add(GraftAspect.IGNITE);
         }
@@ -120,6 +118,21 @@ public final class AspectCatalog {
             aspects.addAll(potionAspects(potionMeta));
         }
 
+        return Set.copyOf(aspects);
+    }
+
+    public Set<GraftAspect> itemAspects(Material material) {
+        if (isAir(material)) {
+            return Set.of();
+        }
+
+        EnumSet<GraftAspect> aspects = EnumSet.noneOf(GraftAspect.class);
+        if (material == Material.SPLASH_POTION || material == Material.LINGERING_POTION || material == Material.TIPPED_ARROW) {
+            aspects.add(GraftAspect.ON_HIT);
+        }
+        if (material == Material.TNT) {
+            aspects.add(GraftAspect.EXPLOSIVE);
+        }
         return Set.copyOf(aspects);
     }
 

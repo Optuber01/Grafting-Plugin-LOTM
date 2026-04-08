@@ -25,6 +25,9 @@ public final class GraftCompatibilityValidatorTest {
         GraftSubject stone = new GraftSubject("block:stone", "Stone", SubjectKind.BLOCK, Set.of());
         GraftSubject doorway = new GraftSubject("block:oak_door", "Oak Door", SubjectKind.BLOCK, Set.of(GraftAspect.ENTRY, GraftAspect.EXIT));
         GraftSubject anchor = new GraftSubject("location:test", "Anchor", SubjectKind.LOCATION, Set.of(GraftAspect.ANCHOR));
+        GraftSubject splashPotion = new GraftSubject("potion:splash_potion", "Splash Potion", SubjectKind.POTION, Set.of(GraftAspect.ON_HIT, GraftAspect.POISON));
+        GraftSubject arrow = new GraftSubject("projectile:arrow", "Arrow", SubjectKind.PROJECTILE, Set.of(GraftAspect.ON_HIT, GraftAspect.TARGET));
+        GraftSubject triggerChest = new GraftSubject("container:chest_trigger", "Trigger Chest", SubjectKind.CONTAINER, Set.of(GraftAspect.ON_OPEN));
 
         List<GraftAspect> stateAspects = validator.compatibleSourceAspects(GraftFamily.STATE, sun);
         if (!stateAspects.equals(List.of(GraftAspect.LIGHT, GraftAspect.HEAT, GraftAspect.IGNITE))) {
@@ -32,6 +35,9 @@ public final class GraftCompatibilityValidatorTest {
         }
         if (!validator.compatibleSourceAspects(GraftFamily.TOPOLOGY, doorway).contains(GraftAspect.ENTRY)) {
             throw new AssertionError("Topology source aspects did not include entry");
+        }
+        if (!validator.compatibleSourceAspects(GraftFamily.SEQUENCE, splashPotion).contains(GraftAspect.ON_HIT)) {
+            throw new AssertionError("Sequence source aspects did not include on-hit");
         }
         if (!validator.compatibleSourceAspects(GraftFamily.STATE, beginning).isEmpty()) {
             throw new AssertionError("Beginning should not expose state aspects");
@@ -50,6 +56,12 @@ public final class GraftCompatibilityValidatorTest {
         }
         if (!validator.validateTarget(doorway, GraftAspect.ENTRY, anchor).success()) {
             throw new AssertionError("Entry should validate against a location target");
+        }
+        if (!validator.validateTarget(splashPotion, GraftAspect.ON_HIT, arrow).success()) {
+            throw new AssertionError("On-hit should validate against a projectile target");
+        }
+        if (!validator.validateTarget(triggerChest, GraftAspect.ON_OPEN, chest).success()) {
+            throw new AssertionError("On-open should validate against a container target");
         }
     }
 }

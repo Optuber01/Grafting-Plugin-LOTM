@@ -100,6 +100,7 @@ public final class FocusInteractionListener implements Listener {
             case STATE -> applyStateTransfer(player, clickedBlock, clickedEntity);
             case RELATION -> applyRelationGraft(player, clickedBlock, clickedEntity);
             case TOPOLOGY -> applyTopologyGraft(player, clickedBlock, clickedEntity);
+            case SEQUENCE -> applySequenceTamper(player, clickedBlock, clickedEntity);
             default -> plugin.messages().send(player, "family-runtime-pending", "family", session.family().displayName());
         }
     }
@@ -189,6 +190,44 @@ public final class FocusInteractionListener implements Listener {
             return;
         }
         plugin.topologyGraftService().applyToBlock(player, session.source(), session.sourceReference(), session.selectedAspect(), focusTarget.block());
+    }
+
+    private void applySequenceTamper(Player player, Block clickedBlock, Entity clickedEntity) {
+        CastSession session = plugin.castSessionManager().session(player.getUniqueId());
+        if (session.selectedAspect() == GraftAspect.ON_HIT) {
+            if (clickedEntity instanceof Projectile projectile) {
+                plugin.sequenceTamperService().applyToProjectile(player, session.source(), session.sourceReference(), session.selectedAspect(), projectile);
+                return;
+            }
+
+            FocusTarget focusTarget = resolveLookTarget(player);
+            if (focusTarget != null && focusTarget.entity() instanceof Projectile projectile) {
+                plugin.sequenceTamperService().applyToProjectile(player, session.source(), session.sourceReference(), session.selectedAspect(), projectile);
+                return;
+            }
+            plugin.messages().send(player, "no-target-found");
+            return;
+        }
+
+        if (clickedBlock != null) {
+            plugin.sequenceTamperService().applyToBlock(player, session.source(), session.sourceReference(), session.selectedAspect(), clickedBlock);
+            return;
+        }
+
+        FocusTarget focusTarget = resolveLookTarget(player);
+        if (focusTarget == null) {
+            plugin.messages().send(player, "no-target-found");
+            return;
+        }
+        if (focusTarget.block() != null) {
+            plugin.sequenceTamperService().applyToBlock(player, session.source(), session.sourceReference(), session.selectedAspect(), focusTarget.block());
+            return;
+        }
+        if (focusTarget.entity() instanceof Projectile projectile) {
+            plugin.sequenceTamperService().applyToProjectile(player, session.source(), session.sourceReference(), session.selectedAspect(), projectile);
+            return;
+        }
+        plugin.messages().send(player, "no-target-found");
     }
 
     private ResolvedSource resolveConcreteSource(Player player, Block clickedBlock, Entity clickedEntity) {

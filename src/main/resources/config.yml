@@ -26,6 +26,10 @@ topology-graft:
   duration-seconds: 30
   activation-radius: 1.35
   activation-cooldown-ticks: 20
+sequence-tamper:
+  payload-duration-seconds: 20
+  open-relay-duration-seconds: 30
+  relay-open-ticks: 25
 concepts:
   sun:
     name: Sun

@@ -16,6 +16,7 @@ public final class AspectCatalogTest {
         assertContains(catalog.blockAspects(Material.LAVA), GraftAspect.HEAT, GraftAspect.IGNITE);
         assertContains(catalog.blockAspects(Material.SLIME_BLOCK), GraftAspect.BOUNCE);
         assertContains(catalog.blockAspects(Material.CHEST), GraftAspect.OPEN, GraftAspect.ON_OPEN, GraftAspect.CONTAINER_LINK, GraftAspect.DESTINATION);
+        assertContains(catalog.itemAspects(Material.SPLASH_POTION), GraftAspect.ON_HIT);
     }
 
     private static void assertContains(Set<GraftAspect> actual, GraftAspect... expected) {

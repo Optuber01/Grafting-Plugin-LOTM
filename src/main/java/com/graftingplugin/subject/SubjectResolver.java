@@ -66,14 +66,26 @@ public final class SubjectResolver {
         if (itemStack == null || itemStack.getType() == Material.AIR || itemStack.getType() == Material.CAVE_AIR || itemStack.getType() == Material.VOID_AIR) {
             return Optional.empty();
         }
-        Set<GraftAspect> aspects = aspectCatalog.itemAspects(itemStack);
-        SubjectKind kind = switch (itemStack.getType()) {
+
+        return resolveItem(itemStack.getType(), aspectCatalog.itemAspects(itemStack));
+    }
+
+    public Optional<GraftSubject> resolveItem(Material material) {
+        if (material == null || material == Material.AIR || material == Material.CAVE_AIR || material == Material.VOID_AIR) {
+            return Optional.empty();
+        }
+
+        return resolveItem(material, aspectCatalog.itemAspects(material));
+    }
+
+    private Optional<GraftSubject> resolveItem(Material material, Set<GraftAspect> aspects) {
+        SubjectKind kind = switch (material) {
             case POTION, SPLASH_POTION, LINGERING_POTION, TIPPED_ARROW -> SubjectKind.POTION;
             default -> SubjectKind.ITEM;
         };
         return Optional.of(new GraftSubject(
-            kind.name().toLowerCase(Locale.ROOT) + ':' + itemStack.getType().name().toLowerCase(Locale.ROOT),
-            humanize(itemStack.getType().name()),
+            kind.name().toLowerCase(Locale.ROOT) + ':' + material.name().toLowerCase(Locale.ROOT),
+            humanize(material.name()),
             kind,
             aspects
         ));

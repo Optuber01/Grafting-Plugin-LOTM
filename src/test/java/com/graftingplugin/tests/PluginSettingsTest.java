@@ -34,6 +34,9 @@ public final class PluginSettingsTest {
         config.set("topology-graft.duration-seconds", 27);
         config.set("topology-graft.activation-radius", 1.75D);
         config.set("topology-graft.activation-cooldown-ticks", 14);
+        config.set("sequence-tamper.payload-duration-seconds", 19);
+        config.set("sequence-tamper.open-relay-duration-seconds", 24);
+        config.set("sequence-tamper.relay-open-ticks", 17);
 
         PluginSettings settings = PluginSettings.fromConfig(config);
 
@@ -64,6 +67,12 @@ public final class PluginSettingsTest {
         }
         if (Math.abs(settings.topologyGraftSettings().activationRadius() - 1.75D) > 0.0001D) {
             throw new AssertionError("Topology graft activation radius was not loaded correctly");
+        }
+        if (settings.sequenceTamperSettings().payloadDurationTicks() != 380 || settings.sequenceTamperSettings().openRelayDurationTicks() != 480) {
+            throw new AssertionError("Sequence tamper durations were not loaded correctly");
+        }
+        if (settings.sequenceTamperSettings().relayOpenTicks() != 17) {
+            throw new AssertionError("Sequence tamper relay ticks were not loaded correctly");
         }
     }
 }
