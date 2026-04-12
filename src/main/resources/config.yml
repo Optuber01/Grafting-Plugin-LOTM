@@ -30,6 +30,15 @@ sequence-tamper:
   payload-duration-seconds: 20
   open-relay-duration-seconds: 30
   relay-open-ticks: 25
+conceptual-graft:
+  zone-duration-seconds: 45
+  zone-radius: 8.0
+  pulse-interval-ticks: 20
+  cooldown-seconds: 30
+  loop-duration-seconds: 60
+  loop-activation-radius: 1.5
+  loop-cooldown-ticks: 30
+  max-active-per-player: 1
 concepts:
   sun:
     name: Sun
@@ -110,3 +119,35 @@ concepts:
       - conceal
     properties:
       obscurity: 3.0
+  sky:
+    name: Sky
+    aspects:
+      - light
+      - speed
+      - bounce
+    properties:
+      luminance: 2.0
+      motility: 1.0
+  nether:
+    name: Nether
+    aspects:
+      - heat
+      - ignite
+    properties:
+      thermal: 4.0
+      volatility: 2.0
+  end-dimension:
+    name: End Dimension
+    aspects:
+      - far
+      - conceal
+    properties:
+      obscurity: 4.0
+  overworld:
+    name: Overworld
+    aspects:
+      - light
+      - heal
+    properties:
+      luminance: 1.5
+      vitality: 1.5

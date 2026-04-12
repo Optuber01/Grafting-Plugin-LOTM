@@ -2,6 +2,7 @@ package com.graftingplugin.focus;
 
 import com.graftingplugin.GraftingPlugin;
 import com.graftingplugin.aspect.GraftAspect;
+import com.graftingplugin.gui.ConceptCatalogGui;
 import com.graftingplugin.cast.CastSourceReference;
 import com.graftingplugin.cast.CastSession;
 import com.graftingplugin.cast.GraftFamily;
@@ -75,6 +76,23 @@ public final class FocusInteractionListener implements Listener {
     }
 
     private void handleLeftClick(Player player, Action action, Block targetBlock, CastSession session) {
+        ConceptCatalogGui.PendingConceptAction pending = plugin.conceptCatalogGui().getPendingAction(player);
+        if (pending != null) {
+            if (player.isSneaking() && action == Action.LEFT_CLICK_AIR) {
+                plugin.conceptCatalogGui().clearPendingAction(player);
+                player.sendMessage("\u00a78Conceptual graft cancelled.");
+                return;
+            }
+            Location targetLoc = targetBlock != null ? targetBlock.getLocation().add(0.5, 1.0, 0.5) : player.getLocation();
+            if (pending.type().requiresTwoAnchors()) {
+                plugin.conceptGraftService().activateLoop(player, pending.firstAnchor(), targetLoc);
+            } else {
+                plugin.conceptGraftService().activateZone(player, pending.type(), targetLoc);
+            }
+            plugin.conceptCatalogGui().clearPendingAction(player);
+            return;
+        }
+
         if (player.isSneaking() && action == Action.LEFT_CLICK_AIR) {
             if (session.source() != null) {
                 debugLog(player, "Shift+Left-Click: CLEARING selection (source was %s)", session.source().displayName());

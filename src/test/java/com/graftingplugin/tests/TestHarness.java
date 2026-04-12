@@ -16,7 +16,9 @@ public final class TestHarness {
         run("GraftFamilyAliasTest", GraftFamilyAliasTest::run);
         run("FluidVoidSubjectTest", FluidVoidSubjectTest::run);
         run("PracticalGraftWorkflowTest", PracticalGraftWorkflowTest::run);
-        System.out.println("All milestone-8 and phase-2 tests passed.");
+        run("ConceptGraftCatalogTest", ConceptGraftCatalogTest::run);
+        run("ConceptGraftSettingsTest", ConceptGraftSettingsTest::run);
+        System.out.println("All phase-2 and conceptual-graft tests passed.");
     }
 
     private static void run(String name, Runnable test) {

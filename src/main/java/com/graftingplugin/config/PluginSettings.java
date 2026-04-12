@@ -1,5 +1,6 @@
 package com.graftingplugin.config;
 
+import com.graftingplugin.conceptgraft.ConceptGraftSettings;
 import org.bukkit.Material;
 import org.bukkit.configuration.file.FileConfiguration;
 
@@ -10,7 +11,8 @@ public record PluginSettings(
     StateTransferSettings stateTransferSettings,
     RelationGraftSettings relationGraftSettings,
     TopologyGraftSettings topologyGraftSettings,
-    SequenceTamperSettings sequenceTamperSettings
+    SequenceTamperSettings sequenceTamperSettings,
+    ConceptGraftSettings conceptGraftSettings
 ) {
 
     public static PluginSettings fromConfig(FileConfiguration config) {
@@ -27,7 +29,8 @@ public record PluginSettings(
             StateTransferSettings.fromConfig(config),
             RelationGraftSettings.fromConfig(config),
             TopologyGraftSettings.fromConfig(config),
-            SequenceTamperSettings.fromConfig(config)
+            SequenceTamperSettings.fromConfig(config),
+            ConceptGraftSettings.fromConfig(config)
         );
     }
 }

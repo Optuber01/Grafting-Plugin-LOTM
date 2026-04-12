@@ -162,8 +162,7 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
             return;
         }
         if (args.length < 2) {
-            plugin.conceptCatalogGui().open(player);
-            player.sendMessage("\u00a77Pick a concept source or use \u00a7e/graft concept <name>\u00a77 directly.");
+            plugin.conceptCatalogGui().openConceptualGraftMenu(player);
             return;
         }
         GraftSubject source = plugin.subjectResolver().resolveConcept(args[1]).orElse(null);

@@ -99,6 +99,10 @@ public final class ConceptRegistry {
         defaults.put("end", new ConceptDefinition("end", "End", Set.of(GraftAspect.EXIT, GraftAspect.PATH_END, GraftAspect.END), DynamicPropertyProfile.EMPTY));
         defaults.put("distance", new ConceptDefinition("distance", "Distance", Set.of(GraftAspect.NEAR, GraftAspect.FAR), profile(Map.of(DynamicProperty.MOTILITY, 0.5D))));
         defaults.put("binding", new ConceptDefinition("binding", "Binding", Set.of(GraftAspect.TETHER, GraftAspect.ANCHOR), profile(Map.of(DynamicProperty.MASS, 3.0D))));
+        defaults.put("sky", new ConceptDefinition("sky", "Sky", Set.of(GraftAspect.LIGHT, GraftAspect.SPEED, GraftAspect.BOUNCE), profile(Map.of(DynamicProperty.LUMINANCE, 2.0D, DynamicProperty.MOTILITY, 1.0D))));
+        defaults.put("nether", new ConceptDefinition("nether", "Nether", Set.of(GraftAspect.HEAT, GraftAspect.IGNITE), profile(Map.of(DynamicProperty.THERMAL, 4.0D, DynamicProperty.VOLATILITY, 2.0D))));
+        defaults.put("end-dimension", new ConceptDefinition("end-dimension", "End Dimension", Set.of(GraftAspect.FAR, GraftAspect.CONCEAL), profile(Map.of(DynamicProperty.OBSCURITY, 4.0D))));
+        defaults.put("overworld", new ConceptDefinition("overworld", "Overworld", Set.of(GraftAspect.LIGHT, GraftAspect.HEAL), profile(Map.of(DynamicProperty.LUMINANCE, 1.5D, DynamicProperty.VITALITY, 1.5D))));
         return defaults;
     }
 

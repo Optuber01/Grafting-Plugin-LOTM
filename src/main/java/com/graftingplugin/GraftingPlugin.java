@@ -6,6 +6,8 @@ import com.graftingplugin.cast.CastSessionManager;
 import com.graftingplugin.cast.CastSelectionService;
 import com.graftingplugin.command.GraftCommand;
 import com.graftingplugin.concept.ConceptRegistry;
+import com.graftingplugin.conceptgraft.ConceptGraftCatalog;
+import com.graftingplugin.conceptgraft.ConceptGraftService;
 import com.graftingplugin.config.MessageService;
 import com.graftingplugin.config.PluginSettings;
 import com.graftingplugin.focus.FocusItemService;
@@ -47,6 +49,8 @@ public final class GraftingPlugin extends JavaPlugin {
     private SequenceTamperPlanner sequenceTamperPlanner;
     private SequenceTamperService sequenceTamperService;
     private FocusInteractionListener focusInteractionListener;
+    private ConceptGraftCatalog conceptGraftCatalog;
+    private ConceptGraftService conceptGraftService;
     private ConceptCatalogGui conceptCatalogGui;
     private InventorySlotPickerGui inventorySlotPickerGui;
     private InventoryTargetPickerGui inventoryTargetPickerGui;
@@ -62,6 +66,9 @@ public final class GraftingPlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        if (conceptGraftService != null) {
+            conceptGraftService.shutdown();
+        }
         if (sequenceTamperService != null) {
             sequenceTamperService.shutdown();
         }
@@ -83,6 +90,9 @@ public final class GraftingPlugin extends JavaPlugin {
     }
 
     public void reloadPluginState() {
+        if (conceptGraftService != null) {
+            conceptGraftService.shutdown();
+        }
         if (sequenceTamperService != null) {
             sequenceTamperService.shutdown();
         }
@@ -148,6 +158,12 @@ public final class GraftingPlugin extends JavaPlugin {
         if (this.focusInteractionListener == null) {
             this.focusInteractionListener = new FocusInteractionListener(this);
         }
+        if (this.conceptGraftCatalog == null) {
+            this.conceptGraftCatalog = new ConceptGraftCatalog();
+        }
+        if (this.conceptGraftService == null) {
+            this.conceptGraftService = new ConceptGraftService(this);
+        }
         if (this.conceptCatalogGui == null) {
             this.conceptCatalogGui = new ConceptCatalogGui(this);
         }
@@ -175,6 +191,7 @@ public final class GraftingPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(topologyGraftService, this);
         getServer().getPluginManager().registerEvents(sequenceTamperService, this);
         getServer().getPluginManager().registerEvents(focusInteractionListener, this);
+        getServer().getPluginManager().registerEvents(conceptGraftService, this);
         getServer().getPluginManager().registerEvents(conceptCatalogGui, this);
         getServer().getPluginManager().registerEvents(inventorySlotPickerGui, this);
         getServer().getPluginManager().registerEvents(inventoryTargetPickerGui, this);
@@ -251,6 +268,14 @@ public final class GraftingPlugin extends JavaPlugin {
 
     public InventoryTargetPickerGui inventoryTargetPickerGui() {
         return inventoryTargetPickerGui;
+    }
+
+    public ConceptGraftCatalog conceptGraftCatalog() {
+        return conceptGraftCatalog;
+    }
+
+    public ConceptGraftService conceptGraftService() {
+        return conceptGraftService;
     }
 
     public FocusInteractionListener focusInteractionListener() {

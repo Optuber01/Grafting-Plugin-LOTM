@@ -32,3 +32,7 @@ item-deposited: '<aqua>{item}</aqua> <gray>deposited into</gray> <gold>{target}<
 slot-swap-applied: '<aqua>{aspect}</aqua> <gray>applied. Items swapped from</gray> <gold>{source}</gold>.'
 item-slot-repaired: '<aqua>{aspect}</aqua> <gray>applied to slot item</gray> <gold>{target}</gold>.'
 target-slot-set: '<gray>Target slot set to slot <aqua>{slot}</aqua>. Cast to apply.</gray>'
+conceptual-zone-activated: '<dark_purple><bold>\u2726</bold> <gold>{graft}</gold> grafted onto the zone for <aqua>{seconds}s</aqua>.</dark_purple>'
+conceptual-loop-activated: '<dark_purple><bold>\u2726</bold> Beginning \u2194 End loop created for <aqua>{seconds}s</aqua>.</dark_purple>'
+conceptual-cooldown: '<red>Conceptual grafting on cooldown. <aqua>{seconds}s</aqua> remaining.</red>'
+conceptual-max-active: '<red>You already have the maximum number of active conceptual grafts.</red>'
