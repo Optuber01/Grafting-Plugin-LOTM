@@ -43,21 +43,45 @@ The plugin jar is written to `build/libs/`.
 - The focus must be in the player's main hand.
 - Range is controlled by `focus.interaction-range`.
 
-## Core loop
+## Core loop (practical grafting)
 
 1. Pick a mode with `/graft mode <state|link|location|event>`.
 2. Pick a source with the focus or a command.
 3. Pick an aspect.
 4. Cast on a target.
 
-Legacy mode aliases are still accepted, but the player-facing names are:
+The player-facing mode names are:
 
-- **State Graft**
-- **Link Graft**
-- **Location Graft**
-- **Event Graft**
+- **State Graft** — move a state onto a target
+- **Link Graft** — link a source to a target
+- **Location Graft** — bend space between anchor points
+- **Event Graft** — store a trigger that fires when something happens
 
-Concept sources are a way to pick a source, not a separate mode.
+Practical concept sources (Sun, Frost, Gravity, etc.) are a way to pick a source, not a separate mode.
+
+## Conceptual grafting
+
+Conceptual grafts are a separate, high-impact layer above practical grafting. They graft environmental rules and dimensional identity onto localized zones.
+
+Open the conceptual graft menu with `/graft concept`. From there, pick a conceptual graft type:
+
+- **Sun → Ground** — daylight, burning undead, melting ice, accelerated growth
+- **Sky → Ground** — levitation, no fall damage, upward drift
+- **Nether → Zone** — water evaporates, eternal fire, fire resistance
+- **End → Zone** — random micro-teleports, void echoes, ender resonance
+- **Overworld → Zone** — cancel alien rules, restore natural law
+- **Beginning ↔ End** — spatial cycle between two anchors
+
+After selecting a conceptual graft, left-click a block with the focus to place the zone. Beginning ↔ End requires two anchors: the first is set at your position, the second by left-clicking.
+
+Conceptual grafts are:
+- rare (one active per player by default, with a cooldown)
+- temporary (zones expire after a configurable duration)
+- localized (zone effects apply within a configurable radius)
+- visually distinct (particles and sounds mark the zone)
+- in-memory only (no persistence across restarts)
+
+Settings are in `config.yml` under `conceptual-graft`.
 
 ## Source selection
 
@@ -65,7 +89,8 @@ Concept sources are a way to pick a source, not a separate mode.
 - Shift-right-click with no source selected to pick a fluid source.
 - Shift-left-click in air with no source selected to pick **Void**.
 - Double right-click in air to pick yourself as the source.
-- `/graft concept [name]` opens the concept list or selects a concept directly.
+- `/graft concept <name>` selects a practical concept source directly.
+- `/graft concept list` opens the practical concept catalog.
 - `/graft inventory` opens the inventory source picker.
 
 ## Aspect selection
@@ -78,6 +103,7 @@ Concept sources are a way to pick a source, not a separate mode.
 
 - Left-click a target with the focus to cast.
 - To apply a **State Graft** to an item, hold the target item in your offhand and cast.
+- `/graft target` opens the inventory target slot picker for item-to-item workflows.
 - `/graft clear` clears the current source and aspect but keeps the current mode.
 
 ## Supported modes
@@ -133,9 +159,12 @@ Current behavior is intentionally narrow:
 | Command | Description | Permission |
 | --- | --- | --- |
 | `/graft help [page]` | Show controls and command help. | `grafting.use` |
-| `/graft mode <state|link|location|event>` | Select the active graft mode. | `grafting.use` |
-| `/graft concept [name]` | Open the concept list or select a concept source directly. | `grafting.use` |
+| `/graft mode <state\|link\|location\|event>` | Select the active graft mode. | `grafting.use` |
+| `/graft concept` | Open the conceptual graft menu. | `grafting.use` |
+| `/graft concept list` | Open the practical concept catalog. | `grafting.use` |
+| `/graft concept <name>` | Select a practical concept source directly. | `grafting.use` |
 | `/graft inventory` | Open the inventory source picker. | `grafting.use` |
+| `/graft target` | Open the inventory target slot picker. | `grafting.use` |
 | `/graft aspect <aspect>` | Select an aspect directly. | `grafting.use` |
 | `/graft next` | Cycle to the next compatible aspect. | `grafting.use` |
 | `/graft inspect` | Show the current graft setup. | `grafting.use` |
@@ -149,29 +178,24 @@ Current behavior is intentionally narrow:
 
 ## Default concept sources
 
-Configured in `config.yml`:
-- `sun`
-- `moon`
-- `gravity`
-- `vitality`
-- `swiftness`
-- `frost`
-- `venom`
-- `radiance`
-- `beginning`
-- `end`
-- `distance`
-- `binding`
-- `concealment`
+Configured in `config.yml` under `concepts`:
+- `sun`, `moon`
+- `gravity`, `vitality`, `swiftness`, `frost`, `venom`, `radiance`
+- `beginning`, `end`, `distance`, `binding`, `concealment`
+- `sky`, `nether`, `end-dimension`, `overworld`
+
+The last four (`sky`, `nether`, `end-dimension`, `overworld`) are used as concept keys by the conceptual graft system.
 
 ## Runtime behavior
 
 - Runtime graft state is cleared on plugin disable and reload.
 - Active graft tracking is in-memory only.
 - Family limits are enforced per player by the active registry.
+- Conceptual graft zones and loops are tracked separately with their own cooldowns and limits.
 
 ## Current limits
 
 - This is an authored aspect system, not a freeform text-to-effect engine.
 - Event Graft is intentionally limited to **On Hit** and **On Open**.
+- Conceptual grafts are intentionally limited to six types with zone-based effects.
 - Active graft reporting covers retained runtime state, not every one-shot side effect.

@@ -86,9 +86,9 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
                 sender.sendMessage("");
                 sender.sendMessage("§d§lSource Types:");
                 sender.sendMessage("§7  Concrete  §f-> Right-Click a block, entity, or container");
-                sender.sendMessage("§7  Concept   §f-> /graft concept <name> (named identity like Sun or Frost)");
+                sender.sendMessage("§7  Concept   §f-> /graft concept <name> or /graft concept list");
                 sender.sendMessage("§7  Inventory §f-> /graft inventory opens your item picker as source");
-                sender.sendMessage("§8  Concept = named identity. Concrete = physical world object.");
+                sender.sendMessage("§8  /graft concept alone opens the §5Conceptual Graft§8 menu (rare, high-impact).");
             }
             case 2 -> {
                 sender.sendMessage("§d§lPractical Graft Workflows:");
@@ -121,10 +121,14 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
                 sender.sendMessage("§e  /graft givefocus [player] §f-> Give a Mystic Focus");
                 sender.sendMessage("§e  /graft reload §f-> Reload config");
                 sender.sendMessage("");
+                sender.sendMessage("§d§lConceptual Grafting:");
+                sender.sendMessage("§7  /graft concept §f-> Opens the §5Conceptual Graft§f menu (rare, high-impact zone effects).");
+                sender.sendMessage("§7  /graft concept list §f-> Opens the practical concept catalog.");
+                sender.sendMessage("§7  /graft concept <name> §f-> Directly selects a practical concept source.");
+                sender.sendMessage("");
                 sender.sendMessage("§d§lUseful Notes:");
                 sender.sendMessage("§7  /graft clear resets source and aspect, keeps current mode.");
                 sender.sendMessage("§7  /graft inspect shows your full current setup including target slot.");
-                sender.sendMessage("§7  /graft concept picks a concept source. It is not a mode change.");
             }
         }
         if (page < 3) {
@@ -163,6 +167,11 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
         }
         if (args.length < 2) {
             plugin.conceptCatalogGui().openConceptualGraftMenu(player);
+            return;
+        }
+        if (args[1].equalsIgnoreCase("list") || args[1].equalsIgnoreCase("catalog")) {
+            plugin.conceptCatalogGui().open(player);
+            player.sendMessage("\u00a77Pick a concept source or use \u00a7e/graft concept <name>\u00a77 directly.");
             return;
         }
         GraftSubject source = plugin.subjectResolver().resolveConcept(args[1]).orElse(null);
@@ -434,7 +443,9 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
             return filter(List.of("state", "link", "location", "event"), args[1]);
         }
         if (args.length == 2 && args[0].equalsIgnoreCase("concept")) {
-            return filter(plugin.conceptRegistry().keys(), args[1]);
+            List<String> conceptOptions = new ArrayList<>(plugin.conceptRegistry().keys());
+            conceptOptions.add(0, "list");
+            return filter(conceptOptions, args[1]);
         }
         if (args.length == 2 && args[0].equalsIgnoreCase("aspect") && sender instanceof Player player) {
             CastSession session = plugin.castSessionManager().session(player.getUniqueId());
