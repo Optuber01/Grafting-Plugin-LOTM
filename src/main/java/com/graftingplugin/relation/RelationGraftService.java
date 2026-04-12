@@ -118,6 +118,7 @@ public final class RelationGraftService implements Listener {
             case PROJECTILE_RETARGET_LOCATION -> applyProjectileRetargetToLocation(caster, source, aspect, sourceReference, target.location(), target.subject().displayName(), plan.modifier());
             case CONTAINER_ROUTE -> applyContainerRoute(caster, source, aspect, sourceReference, targetBlock, target.subject().displayName(), plan.modifier());
             case TETHER_LOCATION -> applyTetherToLocation(caster, source, aspect, sourceReference, target.location(), target.subject().displayName(), plan.modifier());
+            case INVENTORY_DEPOSIT -> applyInventoryDeposit(caster, source, sourceReference, targetBlock, target.subject().displayName());
             default -> false;
         };
         if (!success) {
@@ -255,7 +256,7 @@ public final class RelationGraftService implements Listener {
             "aspect", aspect.displayName(),
             "target", target.displayName()
         ));
-        caster.sendMessage("§7" + describeRelationOutcome(plan));
+        caster.sendMessage("\u00a77" + describeRelationOutcome(plan));
         caster.playSound(caster.getLocation(), Sound.ENTITY_BLAZE_SHOOT, 0.7f, 1.2f);
         plugin.castSessionManager().session(caster.getUniqueId()).clearSelection();
     }
@@ -263,7 +264,7 @@ public final class RelationGraftService implements Listener {
     private RelationGraftPlan validateAndPlan(Player caster, GraftSubject source, GraftAspect aspect, GraftSubject target) {
         GraftCompatibilityResult compatibility = plugin.compatibilityValidator().validateTarget(source, aspect, target);
         if (!compatibility.success()) {
-            caster.sendMessage("§c" + compatibility.message());
+            caster.sendMessage("\u00a7c" + compatibility.message());
             return null;
         }
 
@@ -514,6 +515,8 @@ public final class RelationGraftService implements Listener {
             case PROJECTILE_RETARGET_ENTITY, PROJECTILE_RETARGET_LOCATION -> "Projectile retarget active for " + formatSeconds((int) Math.round(settings.projectileDurationTicks() * mod.durationMultiplier())) + " with turn strength " + formatDecimal(settings.projectileTurnStrength() * mod.intensity()) + ".";
             case CONTAINER_ROUTE -> "Container route active for " + formatSeconds((int) Math.round(settings.containerDurationTicks() * mod.durationMultiplier())) + ".";
             case TETHER_ENTITY, TETHER_LOCATION -> "Tether active for " + formatSeconds((int) Math.round(settings.tetherDurationTicks() * mod.durationMultiplier())) + " with pull strength " + formatDecimal(settings.tetherStrength() * mod.intensity()) + ".";
+            case INVENTORY_DEPOSIT -> "Item deposited into container.";
+            case SLOT_SWAP -> "Items swapped between slots.";
         };
     }
 
@@ -525,7 +528,7 @@ public final class RelationGraftService implements Listener {
         if (owner == null || !owner.isOnline()) {
             return;
         }
-        owner.sendMessage("§7" + aspectName + " from " + sourceName + " to " + targetName + " ended: " + reason + ".");
+        owner.sendMessage("\u00a77" + aspectName + " from " + sourceName + " to " + targetName + " ended: " + reason + ".");
     }
 
     private String formatSeconds(int ticks) {
@@ -622,7 +625,7 @@ public final class RelationGraftService implements Listener {
             return null;
         }
 
-        if (aspect == GraftAspect.TETHER || aspect == GraftAspect.TARGET || aspect == GraftAspect.AGGRO || aspect == GraftAspect.RECEIVER) {
+        if (aspect == GraftAspect.TETHER || aspect == GraftAspect.TARGET || aspect == GraftAspect.AGGRO) {
             Location center = block.getLocation().add(0.5D, 0.5D, 0.5D);
             GraftSubject locationTarget = plugin.subjectResolver().resolveLocation(center).orElse(null);
             return locationTarget == null ? null : new ResolvedTarget(locationTarget, center);
@@ -651,6 +654,60 @@ public final class RelationGraftService implements Listener {
             return null;
         }
         return sourceLocation.getBlock();
+    }
+
+    public boolean applySlotToSlot(Player caster, GraftSubject source, int sourceSlot, GraftAspect aspect, int targetSlot) {
+        ItemStack sourceItem = caster.getInventory().getStorageContents()[sourceSlot];
+        ItemStack targetItem = caster.getInventory().getStorageContents()[targetSlot];
+        if (sourceItem == null || sourceItem.getType().isAir()) {
+            caster.sendMessage("\u00a7cSource slot is empty.");
+            return false;
+        }
+        caster.getInventory().setItem(sourceSlot, targetItem);
+        caster.getInventory().setItem(targetSlot, sourceItem);
+        caster.updateInventory();
+        plugin.messages().send(caster, "slot-swap-applied", java.util.Map.of(
+            "aspect", aspect.displayName(),
+            "source", source.displayName()
+        ));
+        caster.playSound(caster.getLocation(), Sound.ENTITY_ITEM_PICKUP, 0.8f, 1.2f);
+        plugin.castSessionManager().session(caster.getUniqueId()).clearSelection();
+        return true;
+    }
+
+    private boolean applyInventoryDeposit(Player caster, GraftSubject source, CastSourceReference sourceReference, Block targetBlock, String targetName) {
+        if (!sourceReference.hasInventorySlot()) {
+            return false;
+        }
+        if (!(targetBlock.getState() instanceof Container container)) {
+            return false;
+        }
+        int slot = sourceReference.inventorySlot();
+        ItemStack item = caster.getInventory().getStorageContents()[slot];
+        if (item == null || item.getType().isAir()) {
+            caster.sendMessage("\u00a7cThat inventory slot is now empty.");
+            return false;
+        }
+        Inventory targetInventory = container.getInventory();
+        int moved = transferIntoTarget(targetInventory, item);
+        if (moved <= 0) {
+            caster.sendMessage("\u00a7cThe target container has no room for " + source.displayName() + ".");
+            return false;
+        }
+        ItemStack remaining = item.clone();
+        remaining.setAmount(item.getAmount() - moved);
+        if (remaining.getAmount() <= 0) {
+            caster.getInventory().setItem(slot, null);
+        } else {
+            caster.getInventory().setItem(slot, remaining);
+        }
+        caster.updateInventory();
+        plugin.messages().send(caster, "item-deposited", java.util.Map.of(
+            "item", source.displayName(),
+            "target", targetName
+        ));
+        caster.playSound(caster.getLocation(), Sound.ENTITY_ITEM_PICKUP, 0.8f, 1.0f);
+        return true;
     }
 
     private void clearAggroRedirect(UUID sourceId, boolean restorePreviousTarget) {

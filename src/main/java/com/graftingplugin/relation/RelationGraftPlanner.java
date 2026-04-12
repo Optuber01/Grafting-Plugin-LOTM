@@ -18,7 +18,8 @@ public final class RelationGraftPlanner {
         PropertyModifier modifier = PropertyModifier.fromProfile(aspect, sourceProfile);
         return switch (aspect) {
             case AGGRO -> planAggro(source.kind(), target.kind(), aspect, modifier);
-            case TARGET, RECEIVER -> planRetarget(source.kind(), target.kind(), aspect, modifier);
+            case TARGET -> planRetarget(source.kind(), target.kind(), aspect, modifier);
+            case RECEIVER -> planReceiver(source.kind(), target.kind(), aspect, modifier);
             case DESTINATION, CONTAINER_LINK -> planContainerRoute(source.kind(), target.kind(), aspect, modifier);
             case TETHER -> planTether(source.kind(), target.kind(), aspect, modifier);
             default -> Optional.empty();
@@ -41,6 +42,24 @@ public final class RelationGraftPlanner {
             case LOCATION -> Optional.of(new RelationGraftPlan(aspect, sourceKind, targetKind, RelationGraftMode.PROJECTILE_RETARGET_LOCATION, "Retarget a projectile toward an anchor point.", modifier));
             default -> Optional.empty();
         };
+    }
+
+    private Optional<RelationGraftPlan> planReceiver(SubjectKind sourceKind, SubjectKind targetKind, GraftAspect aspect, PropertyModifier modifier) {
+        if (sourceKind == SubjectKind.PROJECTILE) {
+            return switch (targetKind) {
+                case ENTITY -> Optional.of(new RelationGraftPlan(aspect, sourceKind, targetKind, RelationGraftMode.PROJECTILE_RETARGET_ENTITY, "Retarget a projectile toward another entity.", modifier));
+                case LOCATION -> Optional.of(new RelationGraftPlan(aspect, sourceKind, targetKind, RelationGraftMode.PROJECTILE_RETARGET_LOCATION, "Retarget a projectile toward an anchor point.", modifier));
+                default -> Optional.empty();
+            };
+        }
+        if (sourceKind == SubjectKind.ITEM || sourceKind == SubjectKind.POTION) {
+            return switch (targetKind) {
+                case CONTAINER -> Optional.of(new RelationGraftPlan(aspect, sourceKind, targetKind, RelationGraftMode.INVENTORY_DEPOSIT, "Deposit the item into the target container.", modifier));
+                case ITEM, POTION -> Optional.of(new RelationGraftPlan(aspect, sourceKind, targetKind, RelationGraftMode.SLOT_SWAP, "Swap the item into the selected target slot.", modifier));
+                default -> Optional.empty();
+            };
+        }
+        return Optional.empty();
     }
 
     private Optional<RelationGraftPlan> planContainerRoute(SubjectKind sourceKind, SubjectKind targetKind, GraftAspect aspect, PropertyModifier modifier) {

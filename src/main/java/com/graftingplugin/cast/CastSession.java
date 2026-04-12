@@ -9,6 +9,7 @@ public final class CastSession {
     private GraftSubject source;
     private CastSourceReference sourceReference = CastSourceReference.none();
     private GraftAspect selectedAspect;
+    private int selectedTargetSlot = -1;
 
     public GraftFamily family() {
         return family;
@@ -48,9 +49,22 @@ public final class CastSession {
         this.selectedAspect = null;
     }
 
+    public int selectedTargetSlot() {
+        return selectedTargetSlot;
+    }
+
+    public void setSelectedTargetSlot(int slot) {
+        this.selectedTargetSlot = slot;
+    }
+
+    public void clearTargetSlotSelection() {
+        this.selectedTargetSlot = -1;
+    }
+
     public void clearSelection() {
         this.source = null;
         this.sourceReference = CastSourceReference.none();
         this.selectedAspect = null;
+        this.selectedTargetSlot = -1;
     }
 }

@@ -28,3 +28,7 @@ active-grafts-cleared-notify: '<gray>An admin cleared your active graft effects.
 selection-cleared: '<gray>Source and aspect cleared. Mode kept at <aqua>{family}</aqua>.</gray>'
 self-source-selected: '<gray>You selected <gold>yourself</gold> as the source.</gray>'
 concept-not-found: '<red>Concept <gold>{concept}</gold> could not be resolved.</red>'
+item-deposited: '<aqua>{item}</aqua> <gray>deposited into</gray> <gold>{target}</gold>.'
+slot-swap-applied: '<aqua>{aspect}</aqua> <gray>applied. Items swapped from</gray> <gold>{source}</gold>.'
+item-slot-repaired: '<aqua>{aspect}</aqua> <gray>applied to slot item</gray> <gold>{target}</gold>.'
+target-slot-set: '<gray>Target slot set to slot <aqua>{slot}</aqua>. Cast to apply.</gray>'

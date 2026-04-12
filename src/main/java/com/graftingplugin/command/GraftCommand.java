@@ -41,6 +41,7 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
             case "mode" -> handleMode(sender, args);
             case "concept" -> handleConcept(sender, args);
             case "inventory", "inv" -> handleInventory(sender);
+            case "target" -> handleTarget(sender);
             case "aspect" -> handleAspect(sender, args);
             case "next", "cycle" -> handleCycle(sender);
             case "clear" -> handleClear(sender);
@@ -65,9 +66,9 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
                 page = 1;
             }
         }
-        page = Math.max(1, Math.min(page, 2));
+        page = Math.max(1, Math.min(page, 3));
 
-        sender.sendMessage("§5§l═══ Grafting Help (" + page + "/2) §5§l═══");
+        sender.sendMessage("§5§l=== Grafting Help (" + page + "/3) §5§l===");
         switch (page) {
             case 1 -> {
                 sender.sendMessage("§d§lCore Loop:");
@@ -77,40 +78,56 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
                 sender.sendMessage("§7  4. §fLeft-Click a target to cast");
                 sender.sendMessage("");
                 sender.sendMessage("§d§lFocus Controls:");
-                sender.sendMessage("§7  Right-Click §f→ Pick a source");
-                sender.sendMessage("§7  Shift+Right-Click §f→ Cycle aspect, or pick a fluid if no source is set");
-                sender.sendMessage("§7  Left-Click §f→ Cast on the target");
-                sender.sendMessage("§7  Shift+Left-Click in air §f→ Clear source and aspect, or pick Void if none is set");
-                sender.sendMessage("§7  Double Right-Click in air §f→ Pick yourself as the source");
+                sender.sendMessage("§7  Right-Click §f-> Pick a source");
+                sender.sendMessage("§7  Shift+Right-Click §f-> Cycle aspects (or pick fluid with no source set)");
+                sender.sendMessage("§7  Left-Click §f-> Cast on the target");
+                sender.sendMessage("§7  Shift+Left-Click air §f-> Clear selection (or pick Void)");
+                sender.sendMessage("§7  Double Right-Click air §f-> Pick yourself as the source");
                 sender.sendMessage("");
-                sender.sendMessage("§d§lQuick Commands:");
-                sender.sendMessage("§e  /graft concept [name] §f→ Open concept sources or pick one directly");
-                sender.sendMessage("§e  /graft inventory §f→ Pick an inventory item as the source");
-                sender.sendMessage("§e  /graft next §f→ Cycle to the next aspect");
-                sender.sendMessage("§e  /graft inspect §f→ Show your current setup");
+                sender.sendMessage("§d§lSource Types:");
+                sender.sendMessage("§7  Concrete  §f-> Right-Click a block, entity, or container");
+                sender.sendMessage("§7  Concept   §f-> /graft concept <name> (named identity like Sun or Frost)");
+                sender.sendMessage("§7  Inventory §f-> /graft inventory opens your item picker as source");
+                sender.sendMessage("§8  Concept = named identity. Concrete = physical world object.");
             }
             case 2 -> {
+                sender.sendMessage("§d§lPractical Graft Workflows:");
+                sender.sendMessage("§7  Item repair: §fMode state, Heal aspect, Left-Click offhand item OR /graft target.");
+                sender.sendMessage("§7  Inv slot -> Chest: §e/graft inventory §f-> pick item, mode link, Left-Click chest.");
+                sender.sendMessage("§7  Chest -> Chest: §fMode link, Right-Click source chest, Left-Click target chest.");
+                sender.sendMessage("§7  Slot -> Slot: §e/graft inventory §f+ §e/graft target §f-> picks both slots, then Left-Click.");
+                sender.sendMessage("");
+                sender.sendMessage("§d§lItem Targeting:");
+                sender.sendMessage("§7  Offhand: §fHold any item in offhand. It is auto-targeted when you cast in air.");
+                sender.sendMessage("§7  Slot: §e/graft target §fpicks a specific inventory slot as target instead.");
+                sender.sendMessage("§8  /graft target overrides offhand targeting for that cast.");
+                sender.sendMessage("");
+                sender.sendMessage("§d§lState Reassignment:");
+                sender.sendMessage("§7  Health/vitality: §fMode state, Heal aspect, cast on a player or mob.");
+                sender.sendMessage("§7  Temperature: §fMode state, Heat or Freeze aspect, cast on entity or block.");
+                sender.sendMessage("§7  Movement: §fMode state, Speed/Slow/Bounce aspect, cast on entity or projectile.");
+            }
+            case 3 -> {
                 sender.sendMessage("§d§lModes:");
-                sender.sendMessage("§9◆ State Graft §f→ Move heat, light, speed, healing, poison, and similar states");
-                sender.sendMessage("§c❤ Link Graft §f→ Redirect aggro, tether targets, retarget projectiles, or route containers");
-                sender.sendMessage("§a✦ Location Graft §f→ Create anchor links and path loops");
-                sender.sendMessage("§6⚡ Event Graft §f→ Use On Hit and On Open triggers");
+                sender.sendMessage("§9* State Graft §f-> Heat, light, speed, heal, freeze, poison, bounce, glow");
+                sender.sendMessage("§c* Link Graft §f-> Aggro redirect, tethers, projectile retarget, container routing");
+                sender.sendMessage("§a* Location Graft §f-> Anchor links, path loops");
+                sender.sendMessage("§6* Event Graft §f-> On Hit and On Open triggers");
+                sender.sendMessage("");
+                sender.sendMessage("§d§lAdmin Commands:");
+                sender.sendMessage("§e  /graft active §f-> Show your active grafts");
+                sender.sendMessage("§e  /graft debug §f-> Toggle debug logging");
+                sender.sendMessage("§e  /graft clearactive [player] §f-> Clear active grafts");
+                sender.sendMessage("§e  /graft givefocus [player] §f-> Give a Mystic Focus");
+                sender.sendMessage("§e  /graft reload §f-> Reload config");
                 sender.sendMessage("");
                 sender.sendMessage("§d§lUseful Notes:");
-                sender.sendMessage("§7  /graft concept picks a source. It is not a separate mode.");
-                sender.sendMessage("§7  /graft inventory only picks a source item.");
-                sender.sendMessage("§7  To graft onto an item, hold the target item in your offhand and cast.");
-                sender.sendMessage("§7  /graft clear keeps your current mode.");
-                sender.sendMessage("");
-                sender.sendMessage("§d§lOther Commands:");
-                sender.sendMessage("§e  /graft active §f→ Show your active grafts");
-                sender.sendMessage("§e  /graft debug §f→ Toggle focus debug logging");
-                sender.sendMessage("§e  /graft clearactive [player] §f→ Clear active grafts (admin)");
-                sender.sendMessage("§e  /graft givefocus [player] §f→ Give a Mystic Focus (admin)");
-                sender.sendMessage("§e  /graft reload §f→ Reload config and clear runtime state (admin)");
+                sender.sendMessage("§7  /graft clear resets source and aspect, keeps current mode.");
+                sender.sendMessage("§7  /graft inspect shows your full current setup including target slot.");
+                sender.sendMessage("§7  /graft concept picks a concept source. It is not a mode change.");
             }
         }
-        if (page < 2) {
+        if (page < 3) {
             sender.sendMessage("§7Use §e/graft help " + (page + 1) + " §7for the next page.");
         }
     }
@@ -133,9 +150,9 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
         session.clearSelection();
         session.setFamily(family);
         plugin.messages().send(player, "mode-set", "family", family.displayName());
-        player.sendMessage("§7" + family.description() + '.');
+        player.sendMessage("\u00a77" + family.description() + '.');
         if (family == GraftFamily.SEQUENCE) {
-            player.sendMessage("§8Event Graft currently supports On Hit and On Open.");
+            player.sendMessage("\u00a78Event Graft currently supports On Hit and On Open.");
         }
     }
 
@@ -146,7 +163,7 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
         }
         if (args.length < 2) {
             plugin.conceptCatalogGui().open(player);
-            player.sendMessage("§7Pick a concept source or use §e/graft concept <name>§7 directly.");
+            player.sendMessage("\u00a77Pick a concept source or use \u00a7e/graft concept <name>\u00a77 directly.");
             return;
         }
         GraftSubject source = plugin.subjectResolver().resolveConcept(args[1]).orElse(null);
@@ -163,8 +180,19 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
             return;
         }
         plugin.inventorySlotPickerGui().open(player);
-        player.sendMessage("§7Pick an inventory item to use as the graft source.");
-        player.sendMessage("§8To graft onto an item, hold the target item in your offhand and cast.");
+        player.sendMessage("\u00a77Pick an item from your inventory to use as the \u00a7eSource\u00a77.");
+        player.sendMessage("\u00a78Link mode: Left-Click a chest to deposit it, or /graft target to pick a slot-swap target.");
+        player.sendMessage("\u00a78State mode: this picks the state source. Use /graft target to pick the item target.");
+    }
+
+    private void handleTarget(CommandSender sender) {
+        Player player = requirePlayer(sender);
+        if (player == null) {
+            return;
+        }
+        plugin.inventoryTargetPickerGui().open(player);
+        player.sendMessage("\u00a77Pick an inventory slot to use as the \u00a7bTarget\u00a77.");
+        player.sendMessage("\u00a78State + Heal: repairs the item in that slot. Link + /graft inventory: swaps items between slots.");
     }
 
     private void handleAspect(CommandSender sender, String[] args) {
@@ -210,7 +238,7 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
         }
         boolean nowEnabled = !plugin.focusInteractionListener().isDebugEnabled(player);
         plugin.focusInteractionListener().setDebugEnabled(player, nowEnabled);
-        player.sendMessage(nowEnabled ? "§aDebug logging ENABLED. All wand actions will be logged to console." : "§cDebug logging DISABLED.");
+        player.sendMessage(nowEnabled ? "\u00a7aDebug logging ENABLED. All wand actions will be logged to console." : "\u00a7cDebug logging DISABLED.");
     }
 
     private void handleInspect(CommandSender sender) {
@@ -219,14 +247,35 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
             return;
         }
         CastSession session = plugin.castSessionManager().session(player.getUniqueId());
-        player.sendMessage("Mode: " + session.family().displayName());
-        player.sendMessage("Source: " + (session.source() == null ? "none" : session.source().displayName()));
-        player.sendMessage("Aspect: " + (session.selectedAspect() == null ? "none" : session.selectedAspect().displayName()));
-        player.sendMessage("Supported aspects for mode: " + formatAspectList(plugin.compatibilityValidator().supportedFamilyAspects(session.family())));
+        player.sendMessage("\u00a7dMode: \u00a7f" + session.family().displayName());
+        if (session.source() == null) {
+            player.sendMessage("\u00a7dSource: \u00a77none \u00a78(Right-Click something, or /graft inventory / /graft concept)");
+        } else {
+            boolean isConcept = session.source().kind() == com.graftingplugin.subject.SubjectKind.CONCEPT;
+            String srcLabel = isConcept ? "Concept Source" : "Source";
+            String slotSuffix = session.sourceReference().hasInventorySlot() ? " \u00a78[inv slot " + (session.sourceReference().inventorySlot() + 1) + "]" : "";
+            player.sendMessage("\u00a7d" + srcLabel + ": \u00a76" + session.source().displayName() + slotSuffix);
+            if (isConcept) {
+                player.sendMessage("\u00a78Concept sources are named identities, not physical objects.");
+            }
+        }
+        player.sendMessage("\u00a7dAspect: \u00a7f" + (session.selectedAspect() == null ? "\u00a77none" : session.selectedAspect().displayName()));
+        if (session.selectedTargetSlot() >= 0) {
+            org.bukkit.inventory.ItemStack tgtItem = player.getInventory().getStorageContents()[session.selectedTargetSlot()];
+            String tgtName = (tgtItem != null && !tgtItem.getType().isAir()) ? tgtItem.getType().name().toLowerCase(java.util.Locale.ROOT) : "empty";
+            player.sendMessage("\u00a7dTarget Slot: \u00a7b" + (session.selectedTargetSlot() + 1) + " \u00a78(" + tgtName + ")");
+        } else {
+            player.sendMessage("\u00a7dTarget Slot: \u00a77not set \u00a78(/graft target to pick)");
+        }
+        List<GraftAspect> supported = plugin.compatibilityValidator().supportedFamilyAspects(session.family());
+        player.sendMessage("\u00a7dAvailable aspects: " + formatAspectList(supported));
         if (session.source() != null) {
-            List<GraftAspect> compatibleAspects = plugin.compatibilityValidator().compatibleSourceAspects(session.family(), session.source());
-            player.sendMessage("Available aspects: " + (compatibleAspects.isEmpty() ? "none" : formatAspectList(compatibleAspects)));
-            player.sendMessage("Properties: " + formatProperties(session.source()));
+            List<GraftAspect> compat = plugin.compatibilityValidator().compatibleSourceAspects(session.family(), session.source());
+            player.sendMessage("\u00a7dFrom this source: " + (compat.isEmpty() ? "\u00a77none" : formatAspectList(compat)));
+            String props = formatProperties(session.source());
+            if (!props.isEmpty()) {
+                player.sendMessage("\u00a7dProperties: \u00a77" + props);
+            }
         }
     }
 
@@ -363,10 +412,10 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
     }
 
     private void sendUsage(CommandSender sender) {
-        sender.sendMessage("§dGrafting Plugin §7- Use §e/graft help §7for a quick guide.");
-        sender.sendMessage("/graft help|mode|concept|inventory|inv|aspect|next|cycle|inspect|clear|active|debug");
+        sender.sendMessage("\u00a7dGrafting Plugin \u00a77- Use \u00a7e/graft help \u00a77for a quick guide.");
+        sender.sendMessage("/graft help|mode|concept|inventory|inv|target|aspect|next|cycle|inspect|clear|active|debug");
         sender.sendMessage("/graft status|clearactive|givefocus|reload");
-        sender.sendMessage("§7Modes: §estate §7| §elink §7| §elocation §7| §eevent");
+        sender.sendMessage("\u00a77Modes: \u00a7estate \u00a77| \u00a7elink \u00a77| \u00a7elocation \u00a77| \u00a7eevent");
     }
 
     private Player requirePlayer(CommandSender sender) {
@@ -380,7 +429,7 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (args.length == 1) {
-            return filter(List.of("help", "mode", "concept", "inventory", "inv", "aspect", "next", "cycle", "inspect", "clear", "active", "debug", "status", "clearactive", "givefocus", "reload"), args[0]);
+            return filter(List.of("help", "mode", "concept", "inventory", "inv", "target", "aspect", "next", "cycle", "inspect", "clear", "active", "debug", "status", "clearactive", "givefocus", "reload"), args[0]);
         }
         if (args.length == 2 && args[0].equalsIgnoreCase("mode")) {
             return filter(List.of("state", "link", "location", "event"), args[1]);

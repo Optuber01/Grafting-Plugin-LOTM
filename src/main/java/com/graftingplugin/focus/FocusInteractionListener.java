@@ -339,15 +339,18 @@ public final class FocusInteractionListener implements Listener {
         GraftFamily family = session.family();
         List<GraftAspect> aspects = plugin.compatibilityValidator().compatibleSourceAspects(family, source);
         GraftAspect selectedAspect = session.selectedAspect();
+        boolean isConcept = source.kind() == com.graftingplugin.subject.SubjectKind.CONCEPT;
+        boolean isSlot = reference.hasInventorySlot();
+        String srcPrefix = isConcept ? "§3[Concept] §6" : (isSlot ? "§a[Inv] §6" : "§6");
+        String slotHint = isSlot ? " §8- Left-Click chest or /graft target" : "";
         if (selectedAspect != null) {
-            String suffix = aspects.size() > 1 ? " \u00a78(Shift+Right-Click to cycle)" : "";
-            sendActionBar(player, "\u00a7e\u00a7lSource: \u00a76" + source.displayName() + " \u00a78| \u00a7e" + family.icon() + " " + family.displayName() + " \u00a78| \u00a7b" + selectedAspect.displayName() + suffix);
+            String cycleHint = aspects.size() > 1 ? " §8(shift+RC cycle)" : "";
+            sendActionBar(player, "§eSource: " + srcPrefix + source.displayName() + " §8| " + family.icon() + " §b" + selectedAspect.displayName() + cycleHint + slotHint);
         } else {
-            sendActionBar(player, "\u00a7e\u00a7lSource: \u00a76" + source.displayName() + " \u00a78| \u00a7e" + family.icon() + " " + family.displayName());
+            sendActionBar(player, "§eSource: " + srcPrefix + source.displayName() + " §8| " + family.icon() + " " + family.displayName() + slotHint);
         }
         player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_CHIME, 0.6f, 1.5f);
     }
-
 
     private void applyCast(Player player, Block clickedBlock, Entity clickedEntity) {
         CastSession session = plugin.castSessionManager().session(player.getUniqueId());
@@ -422,6 +425,10 @@ public final class FocusInteractionListener implements Listener {
 
     private void applyStateTransfer(Player player, Block clickedBlock, Entity clickedEntity) {
         CastSession session = plugin.castSessionManager().session(player.getUniqueId());
+        if (session.selectedTargetSlot() >= 0) {
+            plugin.stateTransferService().applyToInventorySlot(player, session.source(), session.selectedAspect(), session.selectedTargetSlot());
+            return;
+        }
         FocusTarget target = resolveStateTarget(player, clickedBlock, clickedEntity);
         if (target != null) {
             applyStateTransferToTarget(player, session, target);
@@ -429,6 +436,7 @@ public final class FocusInteractionListener implements Listener {
         }
         if (canApplyToOffhandItem(player, session.selectedAspect())) {
             plugin.stateTransferService().applyToOffhandItem(player, session.source(), session.selectedAspect());
+            sendActionBar(player, "\u00a78Tip: use \u00a7e/graft target\u00a78 to pick a specific slot instead of offhand.");
             return;
         }
         plugin.stateTransferService().applyToArea(player, session.source(), session.selectedAspect(), player.getLocation());
@@ -452,9 +460,17 @@ public final class FocusInteractionListener implements Listener {
 
     private void applyRelationGraft(Player player, Block clickedBlock, Entity clickedEntity) {
         CastSession session = plugin.castSessionManager().session(player.getUniqueId());
+        if (session.sourceReference().hasInventorySlot() && session.selectedTargetSlot() >= 0) {
+            plugin.relationGraftService().applySlotToSlot(player, session.source(), session.sourceReference().inventorySlot(), session.selectedAspect(), session.selectedTargetSlot());
+            return;
+        }
         FocusTarget target = resolveExplicitOrLookTarget(player, clickedBlock, clickedEntity);
         if (target == null) {
-            plugin.messages().send(player, "no-target-found");
+            if (session.sourceReference().hasInventorySlot()) {
+                sendActionBar(player, "\u00a7cNo container target found. Point at a chest or use \u00a7e/graft target\u00a7c to pick a slot.");
+            } else {
+                plugin.messages().send(player, "no-target-found");
+            }
             return;
         }
         if (target.entity() != null) {

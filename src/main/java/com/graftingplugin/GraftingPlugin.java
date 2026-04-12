@@ -12,6 +12,7 @@ import com.graftingplugin.focus.FocusItemService;
 import com.graftingplugin.focus.FocusInteractionListener;
 import com.graftingplugin.gui.ConceptCatalogGui;
 import com.graftingplugin.gui.InventorySlotPickerGui;
+import com.graftingplugin.gui.InventoryTargetPickerGui;
 import com.graftingplugin.relation.RelationGraftPlanner;
 import com.graftingplugin.relation.RelationGraftService;
 import com.graftingplugin.sequence.SequenceTamperPlanner;
@@ -48,6 +49,7 @@ public final class GraftingPlugin extends JavaPlugin {
     private FocusInteractionListener focusInteractionListener;
     private ConceptCatalogGui conceptCatalogGui;
     private InventorySlotPickerGui inventorySlotPickerGui;
+    private InventoryTargetPickerGui inventoryTargetPickerGui;
 
     @Override
     public void onEnable() {
@@ -152,6 +154,9 @@ public final class GraftingPlugin extends JavaPlugin {
         if (this.inventorySlotPickerGui == null) {
             this.inventorySlotPickerGui = new InventorySlotPickerGui(this);
         }
+        if (this.inventoryTargetPickerGui == null) {
+            this.inventoryTargetPickerGui = new InventoryTargetPickerGui(this);
+        }
     }
 
     private void registerCommands() {
@@ -172,6 +177,7 @@ public final class GraftingPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(focusInteractionListener, this);
         getServer().getPluginManager().registerEvents(conceptCatalogGui, this);
         getServer().getPluginManager().registerEvents(inventorySlotPickerGui, this);
+        getServer().getPluginManager().registerEvents(inventoryTargetPickerGui, this);
         focusInteractionListener.logStartup();
     }
 
@@ -241,6 +247,10 @@ public final class GraftingPlugin extends JavaPlugin {
 
     public InventorySlotPickerGui inventorySlotPickerGui() {
         return inventorySlotPickerGui;
+    }
+
+    public InventoryTargetPickerGui inventoryTargetPickerGui() {
+        return inventoryTargetPickerGui;
     }
 
     public FocusInteractionListener focusInteractionListener() {

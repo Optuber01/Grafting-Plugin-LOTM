@@ -159,6 +159,7 @@ public final class AspectCatalog {
         if (material == Material.SPLASH_POTION || material == Material.LINGERING_POTION || material == Material.TIPPED_ARROW) {
             aspects.add(GraftAspect.ON_HIT);
         }
+        aspects.add(GraftAspect.RECEIVER);
         return Set.copyOf(aspects);
     }
 

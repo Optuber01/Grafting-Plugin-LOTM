@@ -150,11 +150,42 @@ public final class StateTransferService implements Listener {
 
         ItemStack updated = applyItemPlan(offhand, plan);
         if (updated == null) {
-            caster.sendMessage("§cThat carried item cannot express " + aspect.displayName() + ".");
+            caster.sendMessage("\u00a7cThat carried item cannot express " + aspect.displayName() + ".");
             return false;
         }
 
         caster.getInventory().setItemInOffHand(updated);
+        caster.updateInventory();
+        finishItemCast(caster, aspect, target.displayName(), updated, plan);
+        return true;
+    }
+
+    public boolean applyToInventorySlot(Player caster, GraftSubject source, GraftAspect aspect, int slot) {
+        ItemStack[] storageContents = caster.getInventory().getStorageContents();
+        if (slot < 0 || slot >= storageContents.length) {
+            plugin.messages().send(caster, "no-target-found");
+            return false;
+        }
+        ItemStack item = storageContents[slot];
+        if (item == null || item.getType().isAir() || plugin.focusItemService().isFocus(item)) {
+            plugin.messages().send(caster, "no-target-found");
+            return false;
+        }
+        GraftSubject target = plugin.subjectResolver().resolveItem(item).orElse(null);
+        if (target == null) {
+            plugin.messages().send(caster, "no-target-found");
+            return false;
+        }
+        StateTransferPlan plan = validateAndPlan(caster, source, aspect, target);
+        if (plan == null) {
+            return false;
+        }
+        ItemStack updated = applyItemPlan(item, plan);
+        if (updated == null) {
+            caster.sendMessage("\u00a7cThat item cannot express " + aspect.displayName() + ".");
+            return false;
+        }
+        caster.getInventory().setItem(slot, updated);
         caster.updateInventory();
         finishItemCast(caster, aspect, target.displayName(), updated, plan);
         return true;
@@ -256,7 +287,7 @@ public final class StateTransferService implements Listener {
             "aspect", aspect.displayName(),
             "target", targetName
         ));
-        caster.sendMessage("§7" + describeEntityOutcome(plan));
+        caster.sendMessage("\u00a77" + describeEntityOutcome(plan));
         if (targetEntity instanceof LivingEntity living) {
             living.getWorld().spawnParticle(Particle.ENCHANT, living.getLocation().add(0, living.getHeight() / 2, 0), 25, 0.4, 0.4, 0.4, 0.8);
         } else {
@@ -270,14 +301,14 @@ public final class StateTransferService implements Listener {
             "aspect", aspect.displayName(),
             "target", targetName
         ));
-        caster.sendMessage("§7" + describeProjectileOutcome(plan));
+        caster.sendMessage("\u00a77" + describeProjectileOutcome(plan));
         caster.playSound(caster.getLocation(), Sound.ENTITY_EVOKER_CAST_SPELL, 0.7f, 1.0f);
         clearCastSelection(caster);
     }
 
     private void finishItemCast(Player caster, GraftAspect aspect, String targetName, ItemStack updated, StateTransferPlan plan) {
-        caster.sendMessage("§b" + aspect.displayName() + " §7applied to offhand item §6" + targetName + "§7.");
-        caster.sendMessage("§7" + describeItemOutcome(plan, updated));
+        caster.sendMessage("\u00a7b" + aspect.displayName() + " \u00a77applied to offhand item \u00a76" + targetName + "\u00a77.");
+        caster.sendMessage("\u00a77" + describeItemOutcome(plan, updated));
         caster.playSound(caster.getLocation(), Sound.ENTITY_EVOKER_CAST_SPELL, 0.7f, 1.0f);
         clearCastSelection(caster);
     }
@@ -391,7 +422,7 @@ public final class StateTransferService implements Listener {
     private StateTransferPlan validateAndPlan(Player caster, GraftSubject source, GraftAspect aspect, GraftSubject target) {
         GraftCompatibilityResult compatibility = plugin.compatibilityValidator().validateTarget(source, aspect, target);
         if (!compatibility.success()) {
-            caster.sendMessage("§c" + compatibility.message());
+            caster.sendMessage("\u00a7c" + compatibility.message());
             return null;
         }
 
@@ -595,7 +626,7 @@ public final class StateTransferService implements Listener {
             "aspect", aspect.displayName(),
             "target", targetName
         ));
-        caster.sendMessage("§7" + describeFieldOutcome(plan, settings, targetName));
+        caster.sendMessage("\u00a77" + describeFieldOutcome(plan, settings, targetName));
     }
 
     private void pulseField(Player caster, GraftAspect aspect, Location center, StateTransferSettings settings, PropertyModifier mod) {
@@ -632,7 +663,7 @@ public final class StateTransferService implements Listener {
                 "aspect", aspect.displayName(),
                 "target", targetName
             ));
-            caster.sendMessage("§7" + targetName + " reacted immediately to " + aspect.displayName() + ".");
+            caster.sendMessage("\u00a77" + targetName + " reacted immediately to " + aspect.displayName() + ".");
             return true;
         }
         double contactRadius = Math.max(1.1D, 0.9D * mod.radiusMultiplier());
@@ -654,7 +685,7 @@ public final class StateTransferService implements Listener {
             "aspect", aspect.displayName(),
             "target", targetName
         ));
-        caster.sendMessage("§7" + describeBlockOutcome(plan, targetName, contactRadius, manifestDuration, ambient != null));
+        caster.sendMessage("\u00a77" + describeBlockOutcome(plan, targetName, contactRadius, manifestDuration, ambient != null));
         return true;
     }
 
