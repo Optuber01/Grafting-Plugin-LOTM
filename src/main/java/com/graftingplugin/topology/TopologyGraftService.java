@@ -1,7 +1,9 @@
 package com.graftingplugin.topology;
 
 import com.graftingplugin.GraftingPlugin;
+import com.graftingplugin.aspect.AspectEffectConfig;
 import com.graftingplugin.aspect.GraftAspect;
+import com.graftingplugin.aspect.PropertyModifier;
 import com.graftingplugin.cast.CastSourceReference;
 import com.graftingplugin.cast.GraftFamily;
 import com.graftingplugin.config.TopologyGraftSettings;
@@ -10,6 +12,7 @@ import com.graftingplugin.validation.GraftCompatibilityResult;
 import org.bukkit.Chunk;
 import org.bukkit.Location;
 import org.bukkit.Particle;
+import org.bukkit.Sound;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -165,14 +168,11 @@ public final class TopologyGraftService implements Listener {
     private TopologyGraftPlan validateAndPlan(Player caster, GraftSubject source, GraftAspect aspect, GraftSubject target) {
         GraftCompatibilityResult compatibility = plugin.compatibilityValidator().validateTarget(source, aspect, target);
         if (!compatibility.success()) {
-            plugin.messages().send(caster, "target-incompatible", Map.of(
-                "target", target.displayName(),
-                "aspect", aspect.displayName()
-            ));
+            caster.sendMessage("§c" + compatibility.message());
             return null;
         }
 
-        TopologyGraftPlan plan = planner.plan(aspect, source, target).orElse(null);
+        TopologyGraftPlan plan = planner.plan(aspect, source, target, source.properties()).orElse(null);
         if (plan == null) {
             plugin.messages().send(caster, "topology-handler-missing", Map.of(
                 "aspect", aspect.displayName(),
@@ -196,8 +196,11 @@ public final class TopologyGraftService implements Listener {
         }
 
         TopologyGraftSettings settings = plugin.settings().topologyGraftSettings();
+        PropertyModifier mod = plan.modifier();
+        int durationTicks = (int) (settings.durationTicks() * mod.durationMultiplier());
+        double activationRadius = settings.activationRadius() * mod.radiusMultiplier();
         UUID routeId = UUID.randomUUID();
-        BukkitTask cleanupTask = plugin.getServer().getScheduler().runTaskLater(plugin, () -> clearRoute(routeId), settings.durationTicks());
+        BukkitTask cleanupTask = plugin.getServer().getScheduler().runTaskLater(plugin, () -> clearRoute(routeId), durationTicks);
         activeTasks.add(cleanupTask);
 
         ActiveTopologyRoute route = new ActiveTopologyRoute(
@@ -209,7 +212,7 @@ public final class TopologyGraftService implements Listener {
             destinationAnchor,
             sourceAnchor.blockAnchor(),
             target.blockAnchor(),
-            settings.activationRadius(),
+            activationRadius,
             settings.activationCooldownTicks(),
             cleanupTask,
             sourceAnchor.displayName(),
@@ -223,14 +226,26 @@ public final class TopologyGraftService implements Listener {
             aspect.displayName(),
             sourceAnchor.displayName(),
             target.subject().displayName(),
-            settings.durationTicks(),
+            durationTicks,
             () -> clearRoute(routeId)
         )) {
             cleanup.run();
         }
 
-        sourceAnchor.anchor().getWorld().spawnParticle(Particle.PORTAL, sourceAnchor.anchor(), 20, 0.25D, 0.5D, 0.25D, 0.05D);
-        target.anchor().getWorld().spawnParticle(Particle.PORTAL, target.anchor(), 20, 0.25D, 0.5D, 0.25D, 0.05D);
+
+        sourceAnchor.anchor().getWorld().spawnParticle(Particle.PORTAL, sourceAnchor.anchor(), 40, 0.5D, 0.5D, 0.5D, 0.5D);
+        sourceAnchor.anchor().getWorld().spawnParticle(Particle.REVERSE_PORTAL, sourceAnchor.anchor(), 20, 0.3D, 0.5D, 0.3D, 0.3D);
+        sourceAnchor.anchor().getWorld().spawnParticle(Particle.END_ROD, sourceAnchor.anchor(), 15, 0.3D, 0.5D, 0.3D, 0.02D);
+        target.anchor().getWorld().spawnParticle(Particle.PORTAL, target.anchor(), 40, 0.5D, 0.5D, 0.5D, 0.5D);
+        target.anchor().getWorld().spawnParticle(Particle.REVERSE_PORTAL, target.anchor(), 20, 0.3D, 0.5D, 0.3D, 0.3D);
+        target.anchor().getWorld().spawnParticle(Particle.END_ROD, target.anchor(), 15, 0.3D, 0.5D, 0.3D, 0.02D);
+
+
+        sourceAnchor.anchor().getWorld().playSound(sourceAnchor.anchor(), Sound.ENTITY_ENDERMAN_TELEPORT, 0.7f, 1.2f);
+        target.anchor().getWorld().playSound(target.anchor(), Sound.ENTITY_ENDERMAN_TELEPORT, 0.7f, 0.8f);
+
+
+        startAnchorPulse(routeId, sourceAnchor.anchor(), target.anchor(), settings);
 
         String messageKey = plan.mode() == TopologyGraftMode.ANCHOR_LINK ? "topology-cast-link" : "topology-cast-loop";
         plugin.messages().send(caster, messageKey, Map.of(
@@ -238,7 +253,16 @@ public final class TopologyGraftService implements Listener {
             "source", sourceAnchor.displayName(),
             "target", target.subject().displayName()
         ));
+        caster.sendMessage("§7Route active for " + formatSeconds(durationTicks) + " with a trigger radius of " + formatDecimal(activationRadius) + "m.");
         return true;
+    }
+
+    private String formatSeconds(int ticks) {
+        return formatDecimal(ticks / 20.0D) + "s";
+    }
+
+    private String formatDecimal(double value) {
+        return String.format(java.util.Locale.ROOT, "%.2f", value);
     }
 
     private void teleportPlayer(Player player, ActiveTopologyRoute route, long now) {
@@ -329,6 +353,29 @@ public final class TopologyGraftService implements Listener {
 
     private Location standingAnchor(Location blockLocation) {
         return blockLocation.clone().add(0.5D, 1.0D, 0.5D);
+    }
+
+    private void startAnchorPulse(UUID routeId, Location source, Location target, TopologyGraftSettings settings) {
+        BukkitTask pulseTask = plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
+            ActiveTopologyRoute route = activeRoutes.get(routeId);
+            if (route == null || !isRouteValid(route)) {
+                return;
+            }
+
+            try {
+                if (source.getWorld() != null && source.getChunk().isLoaded()) {
+                    source.getWorld().spawnParticle(Particle.PORTAL, source, 4, 0.25D, 0.5D, 0.25D, 0.3D);
+                    source.getWorld().spawnParticle(Particle.END_ROD, source, 2, 0.15D, 0.3D, 0.15D, 0.01D);
+                }
+                if (target.getWorld() != null && target.getChunk().isLoaded()) {
+                    target.getWorld().spawnParticle(Particle.PORTAL, target, 4, 0.25D, 0.5D, 0.25D, 0.3D);
+                    target.getWorld().spawnParticle(Particle.END_ROD, target, 2, 0.15D, 0.3D, 0.15D, 0.01D);
+                }
+            } catch (Exception ignored) {
+
+            }
+        }, 20L, 30L);
+        activeTasks.add(pulseTask);
     }
 
     private void clearRoute(UUID routeId) {

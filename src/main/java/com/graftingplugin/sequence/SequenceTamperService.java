@@ -1,7 +1,9 @@
 package com.graftingplugin.sequence;
 
 import com.graftingplugin.GraftingPlugin;
+import com.graftingplugin.aspect.AspectEffectConfig;
 import com.graftingplugin.aspect.GraftAspect;
+import com.graftingplugin.aspect.PropertyModifier;
 import com.graftingplugin.cast.CastSourceReference;
 import com.graftingplugin.cast.GraftFamily;
 import com.graftingplugin.config.SequenceTamperSettings;
@@ -11,18 +13,26 @@ import com.graftingplugin.validation.GraftCompatibilityResult;
 import org.bukkit.Location;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
+import org.bukkit.block.BlockState;
+import org.bukkit.block.BlockFace;
 import org.bukkit.block.Block;
 import org.bukkit.block.Container;
 import org.bukkit.block.Lidded;
+import org.bukkit.block.data.BlockData;
+import org.bukkit.block.data.Bisected;
+import org.bukkit.block.data.Openable;
+import org.bukkit.block.data.Powerable;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.entity.ProjectileHitEvent;
 import org.bukkit.event.inventory.InventoryOpenEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
@@ -74,7 +84,7 @@ public final class SequenceTamperService implements Listener {
         }
 
         boolean success = switch (plan.mode()) {
-            case PROJECTILE_HIT_PAYLOAD -> applyProjectileHitPayload(caster, source, aspect, target, targetProjectile);
+            case PROJECTILE_HIT_PAYLOAD -> applyProjectileHitPayload(caster, source, aspect, target, targetProjectile, plan.modifier());
             default -> false;
         };
         if (!success) {
@@ -86,11 +96,7 @@ public final class SequenceTamperService implements Listener {
             return false;
         }
 
-        plugin.messages().send(caster, "sequence-cast-hit", Map.of(
-            "aspect", aspect.displayName(),
-            "target", target.displayName()
-        ));
-        plugin.castSessionManager().session(caster.getUniqueId()).clearSelection();
+        finishProjectileCast(caster, source, aspect, target, plan);
         return true;
     }
 
@@ -107,7 +113,7 @@ public final class SequenceTamperService implements Listener {
         }
 
         boolean success = switch (plan.mode()) {
-            case CONTAINER_OPEN_RELAY -> applyContainerOpenRelay(caster, source, sourceReference, aspect, target, targetBlock);
+            case INTERACT_RELAY -> applyInteractRelay(caster, source, sourceReference, aspect, target, targetBlock, plan.modifier());
             default -> false;
         };
         if (!success) {
@@ -119,12 +125,28 @@ public final class SequenceTamperService implements Listener {
             return false;
         }
 
+        finishRelayCast(caster, aspect, target, plan);
+        return true;
+    }
+
+    private void finishProjectileCast(Player caster, GraftSubject source, GraftAspect aspect, GraftSubject target, SequenceTamperPlan plan) {
+        plugin.messages().send(caster, "sequence-cast-hit", Map.of(
+            "aspect", aspect.displayName(),
+            "target", target.displayName()
+        ));
+        caster.sendMessage("§7Payload armed for " + formatSeconds(Math.max(1, (int) Math.round(plugin.settings().sequenceTamperSettings().payloadDurationTicks() * plan.modifier().durationMultiplier()))) + ": " + formatAspects(transferablePayloadAspects(source)) + ".");
+        caster.playSound(caster.getLocation(), Sound.BLOCK_DISPENSER_LAUNCH, 0.7f, 1.0f);
+        plugin.castSessionManager().session(caster.getUniqueId()).clearSelection();
+    }
+
+    private void finishRelayCast(Player caster, GraftAspect aspect, GraftSubject target, SequenceTamperPlan plan) {
         plugin.messages().send(caster, "sequence-cast-open", Map.of(
             "aspect", aspect.displayName(),
             "target", target.displayName()
         ));
+        caster.sendMessage("§7Open relay active for " + formatSeconds(Math.max(1, (int) Math.round(plugin.settings().sequenceTamperSettings().openRelayDurationTicks() * plan.modifier().durationMultiplier()))) + ".");
+        caster.playSound(caster.getLocation(), Sound.BLOCK_DISPENSER_LAUNCH, 0.7f, 1.0f);
         plugin.castSessionManager().session(caster.getUniqueId()).clearSelection();
-        return true;
     }
 
     @EventHandler(ignoreCancelled = true)
@@ -145,16 +167,19 @@ public final class SequenceTamperService implements Listener {
 
     @EventHandler(ignoreCancelled = true)
     public void onInventoryOpen(InventoryOpenEvent event) {
-        ActiveOpenRelay relay = relayForInventory(event.getInventory());
-        if (relay == null) {
+        Location location = event.getInventory().getLocation();
+        if (location == null || location.getWorld() == null) {
             return;
         }
-        if (!isRelayValid(relay)) {
-            clearOpenRelay(relay.targetKey());
-            return;
-        }
+        triggerRelayAt(location.getBlock());
+    }
 
-        triggerOpenRelay(relay);
+    @EventHandler(ignoreCancelled = true)
+    public void onPlayerInteract(PlayerInteractEvent event) {
+        if (event.getAction() != Action.RIGHT_CLICK_BLOCK || event.getClickedBlock() == null) {
+            return;
+        }
+        triggerRelayAt(event.getClickedBlock());
     }
 
     @EventHandler(ignoreCancelled = true)
@@ -171,14 +196,11 @@ public final class SequenceTamperService implements Listener {
     private SequenceTamperPlan validateAndPlan(Player caster, GraftSubject source, GraftAspect aspect, GraftSubject target) {
         GraftCompatibilityResult compatibility = plugin.compatibilityValidator().validateTarget(source, aspect, target);
         if (!compatibility.success()) {
-            plugin.messages().send(caster, "target-incompatible", Map.of(
-                "target", target.displayName(),
-                "aspect", aspect.displayName()
-            ));
+            caster.sendMessage("§c" + compatibility.message());
             return null;
         }
 
-        SequenceTamperPlan plan = planner.plan(aspect, source, target).orElse(null);
+        SequenceTamperPlan plan = planner.plan(aspect, source, target, source.properties()).orElse(null);
         if (plan == null) {
             plugin.messages().send(caster, "sequence-handler-missing", Map.of(
                 "aspect", aspect.displayName(),
@@ -190,7 +212,7 @@ public final class SequenceTamperService implements Listener {
         return plan;
     }
 
-    private boolean applyProjectileHitPayload(Player caster, GraftSubject source, GraftAspect aspect, GraftSubject target, Projectile targetProjectile) {
+    private boolean applyProjectileHitPayload(Player caster, GraftSubject source, GraftAspect aspect, GraftSubject target, Projectile targetProjectile, PropertyModifier modifier) {
         Set<GraftAspect> payloadAspects = transferablePayloadAspects(source);
         if (payloadAspects.isEmpty()) {
             return false;
@@ -200,27 +222,18 @@ public final class SequenceTamperService implements Listener {
         SequenceTamperSettings settings = plugin.settings().sequenceTamperSettings();
         UUID projectileId = targetProjectile.getUniqueId();
         boolean wasGlowing = targetProjectile.isGlowing();
-        BukkitTask cleanupTask = plugin.getServer().getScheduler().runTaskLater(plugin, () -> clearHitPayload(projectileId), settings.payloadDurationTicks());
+        int payloadDurationTicks = Math.max(1, (int) Math.round(settings.payloadDurationTicks() * modifier.durationMultiplier()));
+        BukkitTask cleanupTask = plugin.getServer().getScheduler().runTaskLater(plugin, () -> clearHitPayload(projectileId), payloadDurationTicks);
         activeTasks.add(cleanupTask);
         activeHitPayloads.put(projectileId, new ActiveHitPayload(payloadAspects, wasGlowing, cleanupTask));
-        for (Runnable cleanup : plugin.activeGraftRegistry().register(
-            projectileId,
-            caster.getUniqueId(),
-            GraftFamily.SEQUENCE,
-            aspect.displayName(),
-            source.displayName(),
-            target.displayName(),
-            settings.payloadDurationTicks(),
-            () -> clearHitPayload(projectileId)
-        )) {
-            cleanup.run();
-        }
+        registerActive(projectileId, caster.getUniqueId(), aspect.displayName(), source.displayName(), target.displayName(), payloadDurationTicks, () -> clearHitPayload(projectileId));
         targetProjectile.setGlowing(true);
         return true;
     }
 
-    private boolean applyContainerOpenRelay(Player caster, GraftSubject source, CastSourceReference sourceReference, GraftAspect aspect, GraftSubject target, Block targetBlock) {
-        if (!(targetBlock.getState() instanceof Container)) {
+    private boolean applyInteractRelay(Player caster, GraftSubject source, CastSourceReference sourceReference, GraftAspect aspect, GraftSubject target, Block targetBlock, PropertyModifier modifier) {
+        Block normalizedTarget = normalizeRelayBlock(targetBlock);
+        if (!canRelayThrough(normalizedTarget)) {
             return false;
         }
 
@@ -230,7 +243,7 @@ public final class SequenceTamperService implements Listener {
             return false;
         }
 
-        Location targetLocation = targetBlock.getLocation().toBlockLocation();
+        Location targetLocation = normalizedTarget.getLocation().toBlockLocation();
         if (relaySource.blockLocation() != null && relaySource.blockLocation().equals(targetLocation)) {
             return false;
         }
@@ -239,22 +252,11 @@ public final class SequenceTamperService implements Listener {
         UUID trackingId = UUID.nameUUIDFromBytes(targetKey.getBytes(StandardCharsets.UTF_8));
         clearOpenRelay(targetKey);
 
-        int durationTicks = plugin.settings().sequenceTamperSettings().openRelayDurationTicks();
+        int durationTicks = Math.max(1, (int) Math.round(plugin.settings().sequenceTamperSettings().openRelayDurationTicks() * modifier.durationMultiplier()));
         BukkitTask cleanupTask = plugin.getServer().getScheduler().runTaskLater(plugin, () -> clearOpenRelay(targetKey), durationTicks);
         activeTasks.add(cleanupTask);
         activeOpenRelays.put(targetKey, new ActiveOpenRelay(targetKey, relaySource.anchor(), relaySource.blockLocation(), targetLocation, cleanupTask));
-        for (Runnable cleanup : plugin.activeGraftRegistry().register(
-            trackingId,
-            caster.getUniqueId(),
-            GraftFamily.SEQUENCE,
-            aspect.displayName(),
-            source.displayName(),
-            target.displayName(),
-            durationTicks,
-            () -> clearOpenRelay(targetKey)
-        )) {
-            cleanup.run();
-        }
+        registerActive(trackingId, caster.getUniqueId(), aspect.displayName(), source.displayName(), target.displayName(), durationTicks, () -> clearOpenRelay(targetKey));
         return true;
     }
 
@@ -264,7 +266,8 @@ public final class SequenceTamperService implements Listener {
             if (sourceLocation == null || sourceLocation.getWorld() == null) {
                 return null;
             }
-            return new RelaySource(centeredAnchor(sourceLocation), sourceLocation.toBlockLocation());
+            Block normalizedSource = normalizeRelayBlock(sourceLocation.getBlock());
+            return new RelaySource(centeredAnchor(normalizedSource.getLocation()), normalizedSource.getLocation().toBlockLocation());
         }
         if (source.kind() == SubjectKind.CONCEPT || source.kind() == SubjectKind.LOCATION || source.kind() == SubjectKind.AREA) {
             return new RelaySource(caster.getLocation().clone(), null);
@@ -275,10 +278,8 @@ public final class SequenceTamperService implements Listener {
     private Set<GraftAspect> transferablePayloadAspects(GraftSubject source) {
         EnumSet<GraftAspect> payloadAspects = EnumSet.noneOf(GraftAspect.class);
         for (GraftAspect aspect : source.aspectsFor(GraftFamily.STATE)) {
-            switch (aspect) {
-                case LIGHT, GLOW, HEAT, IGNITE, FREEZE, STICKY, POISON, HEAL, SPEED, SLOW, CONCEAL -> payloadAspects.add(aspect);
-                default -> {
-                }
+            if (AspectEffectConfig.isPayloadAspect(aspect)) {
+                payloadAspects.add(aspect);
             }
         }
         return Set.copyOf(payloadAspects);
@@ -302,7 +303,12 @@ public final class SequenceTamperService implements Listener {
     }
 
     private void applyPayloadToEntity(Entity targetEntity, Set<GraftAspect> payloadAspects, Projectile projectile) {
-        if (payloadAspects.contains(GraftAspect.IGNITE) || payloadAspects.contains(GraftAspect.HEAT)) {
+
+        boolean hasFire = payloadAspects.stream().anyMatch(a -> {
+            AspectEffectConfig.EffectSpec spec = AspectEffectConfig.getSpec(a).orElse(null);
+            return spec != null && spec.causesFire();
+        });
+        if (hasFire) {
             targetEntity.setFireTicks(Math.max(targetEntity.getFireTicks(), plugin.settings().stateTransferSettings().igniteFireTicks()));
         }
 
@@ -311,37 +317,41 @@ public final class SequenceTamperService implements Listener {
         }
 
         int duration = plugin.settings().stateTransferSettings().effectDurationTicks();
-        if (payloadAspects.contains(GraftAspect.LIGHT) || payloadAspects.contains(GraftAspect.GLOW)) {
-            livingEntity.addPotionEffect(new PotionEffect(PotionEffectType.GLOWING, duration, 0, true, true, true));
-        }
-        if (payloadAspects.contains(GraftAspect.SPEED)) {
-            livingEntity.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, duration, 1, true, true, true));
-        }
-        if (payloadAspects.contains(GraftAspect.SLOW) || payloadAspects.contains(GraftAspect.STICKY) || payloadAspects.contains(GraftAspect.FREEZE)) {
-            livingEntity.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, duration, 1, true, true, true));
-        }
-        if (payloadAspects.contains(GraftAspect.POISON)) {
-            livingEntity.addPotionEffect(new PotionEffect(PotionEffectType.POISON, duration, 0, true, true, true));
-        }
-        if (payloadAspects.contains(GraftAspect.HEAL)) {
-            livingEntity.setHealth(Math.min(livingEntity.getMaxHealth(), livingEntity.getHealth() + plugin.settings().stateTransferSettings().healAmount()));
-            livingEntity.addPotionEffect(new PotionEffect(PotionEffectType.REGENERATION, duration, 0, true, true, true));
-        }
-        if (payloadAspects.contains(GraftAspect.CONCEAL)) {
-            livingEntity.addPotionEffect(new PotionEffect(PotionEffectType.INVISIBILITY, duration, 0, true, true, true));
-        }
-        if (payloadAspects.contains(GraftAspect.HEAT)) {
-            Entity damageSource = projectile.getShooter() instanceof Entity shooter ? shooter : projectile;
-            livingEntity.damage(plugin.settings().stateTransferSettings().heatDamage(), damageSource);
+        for (GraftAspect aspect : payloadAspects) {
+            AspectEffectConfig.EffectSpec spec = AspectEffectConfig.getSpec(aspect).orElse(null);
+            if (spec == null) {
+                continue;
+            }
+
+
+            if (spec.causesFire()) {
+                if (aspect == GraftAspect.HEAT) {
+                    Entity damageSource = projectile.getShooter() instanceof Entity shooter ? shooter : projectile;
+                    livingEntity.damage(plugin.settings().stateTransferSettings().heatDamage(), damageSource);
+                }
+                continue;
+            }
+
+
+            if (aspect == GraftAspect.HEAL) {
+                livingEntity.setHealth(Math.min(livingEntity.getMaxHealth(), livingEntity.getHealth() + plugin.settings().stateTransferSettings().healAmount()));
+            }
+
+
+            if (spec.primaryEffect() != null) {
+                livingEntity.addPotionEffect(new PotionEffect(spec.primaryEffect(), duration, 0, true, true, true));
+            }
         }
     }
 
     private Particle payloadParticle(Set<GraftAspect> payloadAspects) {
+
+
         if (payloadAspects.contains(GraftAspect.HEAT) || payloadAspects.contains(GraftAspect.IGNITE)) {
             return Particle.FLAME;
         }
         if (payloadAspects.contains(GraftAspect.POISON)) {
-            return Particle.ENTITY_EFFECT;
+            return Particle.SQUID_INK;
         }
         if (payloadAspects.contains(GraftAspect.HEAL)) {
             return Particle.HEART;
@@ -352,7 +362,53 @@ public final class SequenceTamperService implements Listener {
         if (payloadAspects.contains(GraftAspect.SPEED)) {
             return Particle.CLOUD;
         }
+
+        for (GraftAspect aspect : payloadAspects) {
+            Particle p = AspectEffectConfig.particleFor(aspect);
+            if (p != Particle.ENCHANT) {
+                return p;
+            }
+        }
         return Particle.ENCHANT;
+    }
+
+    private void registerActive(UUID trackingId, UUID ownerId, String aspectName, String sourceName, String targetName, int durationTicks, Runnable cleanupAction) {
+        for (Runnable cleanup : plugin.activeGraftRegistry().register(
+            trackingId,
+            ownerId,
+            GraftFamily.SEQUENCE,
+            aspectName,
+            sourceName,
+            targetName,
+            durationTicks,
+            cleanupAction
+        )) {
+            cleanup.run();
+        }
+    }
+
+    private void triggerRelayAt(Block triggerBlock) {
+        Block normalizedTrigger = normalizeRelayBlock(triggerBlock);
+        if (normalizedTrigger == null) {
+            return;
+        }
+        ActiveOpenRelay relay = activeOpenRelays.get(locationKey(normalizedTrigger.getLocation()));
+        if (relay == null) {
+            return;
+        }
+        if (!isRelayValid(relay)) {
+            clearOpenRelay(relay.targetKey());
+            return;
+        }
+        triggerOpenRelay(relay);
+    }
+
+    private String formatAspects(Set<GraftAspect> aspects) {
+        return aspects.stream().map(GraftAspect::displayName).sorted().reduce((left, right) -> left + ", " + right).orElse("none");
+    }
+
+    private String formatSeconds(int ticks) {
+        return String.format(java.util.Locale.ROOT, "%.1fs", ticks / 20.0D);
     }
 
     private ActiveOpenRelay relayForInventory(Inventory inventory) {
@@ -367,7 +423,7 @@ public final class SequenceTamperService implements Listener {
         if (relay.sourceAnchor().getWorld() == null || relay.targetLocation().getWorld() == null) {
             return false;
         }
-        if (!(relay.targetLocation().getBlock().getState() instanceof Container)) {
+        if (!canRelayThrough(relay.targetLocation().getBlock())) {
             return false;
         }
         return relay.sourceBlockLocation() == null || !relay.sourceBlockLocation().getBlock().getType().isAir();
@@ -384,12 +440,72 @@ public final class SequenceTamperService implements Listener {
         anchor.getWorld().spawnParticle(Particle.ENCHANT, anchor, 24, 0.35D, 0.35D, 0.35D, 0.05D);
         anchor.getWorld().playSound(anchor, Sound.BLOCK_CHEST_OPEN, 0.8F, 1.15F);
         if (relay.sourceBlockLocation() != null) {
-            Block sourceBlock = relay.sourceBlockLocation().getBlock();
-            if (sourceBlock.getState() instanceof Lidded lidded) {
-                lidded.open();
-                scheduleRelayClose(relay.sourceBlockLocation(), plugin.settings().sequenceTamperSettings().relayOpenTicks());
-            }
+            activateRelaySource(relay.sourceBlockLocation(), plugin.settings().sequenceTamperSettings().relayOpenTicks());
         }
+    }
+
+    private boolean canRelayThrough(Block block) {
+        if (block == null || block.getType().isAir()) {
+            return false;
+        }
+        BlockState state = block.getState();
+        if (state instanceof Container || state instanceof Lidded) {
+            return true;
+        }
+        BlockData data = block.getBlockData();
+        return data instanceof Openable || data instanceof Powerable;
+    }
+
+    private Block normalizeRelayBlock(Block block) {
+        if (block == null) {
+            return null;
+        }
+        BlockData data = block.getBlockData();
+        if (data instanceof Bisected bisected && bisected.getHalf() == Bisected.Half.TOP) {
+            return block.getRelative(BlockFace.DOWN);
+        }
+        return block;
+    }
+
+    private void activateRelaySource(Location sourceBlockLocation, int delayTicks) {
+        if (sourceBlockLocation.getWorld() == null) {
+            return;
+        }
+        Block sourceBlock = sourceBlockLocation.getBlock();
+        BlockState state = sourceBlock.getState();
+        if (state instanceof Lidded lidded) {
+            lidded.open();
+            scheduleRelayClose(sourceBlockLocation, delayTicks);
+            return;
+        }
+
+        BlockData original = sourceBlock.getBlockData().clone();
+        BlockData updated = original.clone();
+        boolean changed = false;
+        if (updated instanceof Openable openable) {
+            openable.setOpen(true);
+            changed = true;
+        }
+        if (updated instanceof Powerable powerable) {
+            powerable.setPowered(true);
+            changed = true;
+        }
+        if (!changed) {
+            return;
+        }
+        sourceBlock.setBlockData(updated, false);
+        BukkitTask[] taskHolder = new BukkitTask[1];
+        taskHolder[0] = plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+            try {
+                if (sourceBlockLocation.getWorld() == null) {
+                    return;
+                }
+                sourceBlockLocation.getBlock().setBlockData(original, false);
+            } finally {
+                activeTasks.remove(taskHolder[0]);
+            }
+        }, delayTicks);
+        activeTasks.add(taskHolder[0]);
     }
 
     private void scheduleRelayClose(Location sourceBlockLocation, int delayTicks) {

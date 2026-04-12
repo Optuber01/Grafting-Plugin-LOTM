@@ -14,6 +14,10 @@ public final class CastSession {
         return family;
     }
 
+    public GraftFamily effectiveFamily() {
+        return family;
+    }
+
     public void setFamily(GraftFamily family) {
         this.family = family;
     }

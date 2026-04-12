@@ -16,18 +16,17 @@ public final class AspectCatalogTest {
     public static void run() {
         AspectCatalog catalog = new AspectCatalog();
 
-        // Hardcoded rules still work
         assertContains(catalog.blockAspects(Material.LAVA), GraftAspect.HEAT, GraftAspect.IGNITE);
         assertContains(catalog.blockAspects(Material.SLIME_BLOCK), GraftAspect.BOUNCE);
-        assertContains(catalog.blockAspects(Material.CHEST), GraftAspect.OPEN, GraftAspect.ON_OPEN, GraftAspect.CONTAINER_LINK, GraftAspect.DESTINATION);
+        assertContains(catalog.blockAspects(Material.CHEST), GraftAspect.ON_OPEN, GraftAspect.CONTAINER_LINK, GraftAspect.DESTINATION);
+        assertContains(catalog.blockAspects(Material.SPRUCE_DOOR), GraftAspect.ON_OPEN, GraftAspect.ENTRY, GraftAspect.EXIT);
+        assertContains(catalog.blockAspects(Material.LEVER), GraftAspect.ON_OPEN);
         assertContains(catalog.itemAspects(Material.SPLASH_POTION), GraftAspect.ON_HIT);
 
-        // Dynamic derivation: threshold is 3.0. Stone (1.0) and Dirt (0.33) are NOT heavy, but they get ANCHOR.
         assertContains(catalog.blockAspects(Material.STONE), GraftAspect.ANCHOR);
         assertContains(catalog.blockAspects(Material.DIRT), GraftAspect.ANCHOR);
         assertContains(catalog.blockAspects(Material.OBSIDIAN), GraftAspect.HEAVY, GraftAspect.ANCHOR);
 
-        // Property profile smoke test
         DynamicPropertyProfile stoneProfile = catalog.blockProperties(Material.STONE);
         assert stoneProfile.get(DynamicProperty.MASS) > 0 : "Stone should have positive mass";
         DynamicPropertyProfile lavaProfile = catalog.blockProperties(Material.LAVA);
@@ -35,7 +34,6 @@ public final class AspectCatalogTest {
         DynamicPropertyProfile iceProfile = catalog.blockProperties(Material.BLUE_ICE);
         assert iceProfile.get(DynamicProperty.THERMAL) < 0 : "Blue ice should have negative thermal";
 
-        // Air should produce no aspects and EMPTY profile
         assert catalog.blockAspects(Material.AIR).isEmpty() : "Air should have no aspects";
         assert catalog.blockProperties(Material.AIR) == DynamicPropertyProfile.EMPTY : "Air should have empty profile";
     }

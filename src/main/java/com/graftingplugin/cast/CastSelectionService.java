@@ -1,11 +1,15 @@
 package com.graftingplugin.cast;
 
 import com.graftingplugin.GraftingPlugin;
+import com.graftingplugin.aspect.DynamicProperty;
 import com.graftingplugin.aspect.GraftAspect;
 import com.graftingplugin.subject.GraftSubject;
+import com.graftingplugin.validation.GraftCompatibilityResult;
 import org.bukkit.entity.Player;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 public final class CastSelectionService {
@@ -22,38 +26,42 @@ public final class CastSelectionService {
 
     public boolean armSource(Player player, GraftSubject source, CastSourceReference sourceReference) {
         CastSession session = plugin.castSessionManager().session(player.getUniqueId());
-        List<GraftAspect> compatibleAspects = plugin.compatibilityValidator().compatibleSourceAspects(session.family(), source);
+        GraftFamily family = session.effectiveFamily();
+        List<GraftAspect> compatibleAspects = plugin.compatibilityValidator().compatibleSourceAspects(family, source);
         if (compatibleAspects.isEmpty()) {
             plugin.messages().send(player, "source-incompatible", Map.of(
                 "source", source.displayName(),
-                "family", session.family().displayName()
+                "family", family.displayName()
             ));
             return false;
         }
 
         session.setSource(source, sourceReference);
-        if (compatibleAspects.size() == 1) {
-            GraftAspect selectedAspect = compatibleAspects.getFirst();
-            session.setSelectedAspect(selectedAspect);
-            plugin.messages().send(player, "source-armed-single", Map.of(
-                "source", source.displayName(),
-                "aspect", selectedAspect.displayName()
-            ));
-            return true;
-        }
-
-        plugin.messages().send(player, "source-armed-multiple", Map.of(
+        GraftAspect selectedAspect = compatibleAspects.getFirst();
+        session.setSelectedAspect(selectedAspect);
+        plugin.messages().send(player, "source-armed-single", Map.of(
             "source", source.displayName(),
-            "family", session.family().displayName(),
-            "aspects", formatAspectList(compatibleAspects)
+            "aspect", selectedAspect.displayName()
         ));
+        if (compatibleAspects.size() > 1) {
+            player.sendMessage("§7Available " + family.displayName() + " aspects: §b" + formatAspectList(compatibleAspects) + " §8(Shift+Right-Click or /graft next)");
+        }
+        String properties = formatProperties(source);
+        if (!properties.isEmpty()) {
+            player.sendMessage("§8Properties: §7" + properties);
+        }
         return true;
     }
 
     public boolean selectAspect(Player player, GraftAspect aspect) {
         CastSession session = plugin.castSessionManager().session(player.getUniqueId());
-        if (!plugin.compatibilityValidator().supportedFamilyAspects(session.family()).contains(aspect)) {
-            plugin.messages().send(player, "invalid-aspect", "aspect", aspect.displayName());
+        GraftFamily family = session.family();
+        if (!plugin.compatibilityValidator().supportedFamilyAspects(family).contains(aspect)) {
+            if (aspect.family() != family) {
+                player.sendMessage("§c" + aspect.displayName() + " belongs to " + aspect.family().displayName() + ", not " + family.displayName() + '.');
+            } else {
+                player.sendMessage("§c" + aspect.displayName() + " is not supported in " + family.displayName() + '.');
+            }
             return false;
         }
 
@@ -63,8 +71,9 @@ public final class CastSelectionService {
             return false;
         }
 
-        if (!plugin.compatibilityValidator().validateAspectSelection(session.family(), source, aspect).success()) {
-            plugin.messages().send(player, "invalid-aspect", "aspect", aspect.displayName());
+        GraftCompatibilityResult compatibility = plugin.compatibilityValidator().validateAspectSelection(family, source, aspect);
+        if (!compatibility.success()) {
+            player.sendMessage("§c" + compatibility.message());
             return false;
         }
 
@@ -75,5 +84,34 @@ public final class CastSelectionService {
 
     private String formatAspectList(List<GraftAspect> aspects) {
         return String.join(", ", aspects.stream().map(GraftAspect::key).toList());
+    }
+
+    private String formatProperties(GraftSubject source) {
+        List<String> pieces = new ArrayList<>();
+        for (DynamicProperty property : DynamicProperty.values()) {
+            double value = source.properties().get(property);
+            if (value <= 0.0D && property != DynamicProperty.THERMAL) {
+                continue;
+            }
+            if (property == DynamicProperty.THERMAL && value == 0.0D) {
+                continue;
+            }
+            pieces.add(switch (property) {
+                case MASS -> "mass " + formatValue(value);
+                case THERMAL -> "thermal " + formatValue(value);
+                case LUMINANCE -> "luminance " + formatValue(value);
+                case VOLATILITY -> "volatility " + formatValue(value);
+                case MOTILITY -> "motility " + formatValue(value);
+                case VITALITY -> "vitality " + formatValue(value);
+                case INTEGRITY -> "integrity " + formatValue(value);
+                case TOXICITY -> "toxicity " + formatValue(value);
+                case OBSCURITY -> "obscurity " + formatValue(value);
+            });
+        }
+        return String.join(", ", pieces);
+    }
+
+    private String formatValue(double value) {
+        return String.format(Locale.ROOT, "%.2f", value);
     }
 }

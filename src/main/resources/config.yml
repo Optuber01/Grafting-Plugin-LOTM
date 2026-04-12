@@ -46,7 +46,42 @@ concepts:
     name: Gravity
     aspects:
       - heavy
-      - pull
+    properties:
+      mass: 8.0
+  vitality:
+    name: Vitality
+    aspects:
+      - heal
+    properties:
+      vitality: 5.0
+  swiftness:
+    name: Swiftness
+    aspects:
+      - speed
+      - bounce
+    properties:
+      motility: 1.2
+  frost:
+    name: Frost
+    aspects:
+      - freeze
+      - slow
+    properties:
+      thermal: -2.0
+      obscurity: 0.5
+  venom:
+    name: Venom
+    aspects:
+      - poison
+    properties:
+      toxicity: 3.0
+  radiance:
+    name: Radiance
+    aspects:
+      - light
+      - glow
+    properties:
+      luminance: 3.5
   beginning:
     name: Beginning
     aspects:
@@ -73,3 +108,5 @@ concepts:
     name: Concealment
     aspects:
       - conceal
+    properties:
+      obscurity: 3.0

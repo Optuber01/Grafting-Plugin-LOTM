@@ -25,6 +25,7 @@ public final class GraftCompatibilityValidator {
 
     public List<GraftAspect> compatibleSourceAspects(GraftFamily family, GraftSubject source) {
         return source.aspectsFor(family).stream()
+            .filter(rules::containsKey)
             .filter(aspect -> supportsSourceKind(source.kind(), aspect))
             .toList();
     }
@@ -37,13 +38,16 @@ public final class GraftCompatibilityValidator {
 
     public GraftCompatibilityResult validateAspectSelection(GraftFamily family, GraftSubject source, GraftAspect aspect) {
         if (aspect.family() != family) {
-            return GraftCompatibilityResult.failure("Aspect belongs to a different graft family.");
+            return GraftCompatibilityResult.failure("That aspect belongs to another mode.");
+        }
+        if (!rules.containsKey(aspect)) {
+            return GraftCompatibilityResult.failure("That aspect is not supported right now.");
         }
         if (!source.exposes(aspect)) {
-            return GraftCompatibilityResult.failure("Source subject does not expose aspect " + aspect.displayName() + '.');
+            return GraftCompatibilityResult.failure(source.displayName() + " does not have " + aspect.displayName() + '.');
         }
         if (!supportsSourceKind(source.kind(), aspect)) {
-            return GraftCompatibilityResult.failure("Source subject kind cannot provide aspect " + aspect.displayName() + '.');
+            return GraftCompatibilityResult.failure(source.displayName() + " cannot use " + aspect.displayName() + '.');
         }
         return GraftCompatibilityResult.ok();
     }
@@ -56,7 +60,7 @@ public final class GraftCompatibilityValidator {
 
         CompatibilityRule rule = rules.get(aspect);
         if (rule == null || !rule.supports(source.kind(), target.kind())) {
-            return GraftCompatibilityResult.failure("Target subject cannot accept aspect " + aspect.displayName() + '.');
+            return GraftCompatibilityResult.failure(target.displayName() + " cannot receive " + aspect.displayName() + '.');
         }
         return GraftCompatibilityResult.ok();
     }

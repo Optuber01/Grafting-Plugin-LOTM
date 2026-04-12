@@ -37,8 +37,11 @@ public final class SubjectResolver {
     }
 
     public Optional<GraftSubject> resolveBlock(Material material) {
-        if (material == null || material == Material.AIR || material == Material.CAVE_AIR || material == Material.VOID_AIR) {
+        if (material == null || isAir(material)) {
             return Optional.empty();
+        }
+        if (aspectCatalog.isFluid(material)) {
+            return resolveFluid(material);
         }
         Set<GraftAspect> aspects = aspectCatalog.blockAspects(material);
         DynamicPropertyProfile profile = aspectCatalog.blockProperties(material);
@@ -49,6 +52,31 @@ public final class SubjectResolver {
             kind,
             aspects,
             profile
+        ));
+    }
+
+    public Optional<GraftSubject> resolveFluid(Material material) {
+        if (material == null || !aspectCatalog.isFluid(material)) {
+            return Optional.empty();
+        }
+        Set<GraftAspect> aspects = aspectCatalog.fluidAspects(material);
+        DynamicPropertyProfile profile = aspectCatalog.fluidProperties(material);
+        return Optional.of(new GraftSubject(
+            "fluid:" + material.name().toLowerCase(Locale.ROOT),
+            humanize(material.name()),
+            SubjectKind.FLUID,
+            aspects,
+            profile
+        ));
+    }
+
+    public Optional<GraftSubject> resolveVoid() {
+        return Optional.of(new GraftSubject(
+            "void:air",
+            "Void",
+            SubjectKind.VOID,
+            aspectCatalog.voidAspects(),
+            aspectCatalog.voidProperties()
         ));
     }
 
@@ -80,7 +108,7 @@ public final class SubjectResolver {
             return Optional.empty();
         }
 
-        return resolveItem(material, aspectCatalog.itemAspects(material), aspectCatalog.blockProperties(material));
+        return resolveItem(material, aspectCatalog.itemAspects(material), aspectCatalog.itemProperties(material));
     }
 
     private Optional<GraftSubject> resolveItem(Material material, Set<GraftAspect> aspects, DynamicPropertyProfile profile) {
@@ -138,6 +166,10 @@ public final class SubjectResolver {
             SubjectKind.AREA,
             aspects
         ));
+    }
+
+    private boolean isAir(Material material) {
+        return material == Material.AIR || material == Material.CAVE_AIR || material == Material.VOID_AIR;
     }
 
     private String humanize(String raw) {

@@ -4,12 +4,13 @@ import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.AbstractArrow;
+import org.bukkit.entity.Creeper;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Fireball;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Mob;
 import org.bukkit.entity.Projectile;
-import org.bukkit.entity.Tameable;
+import org.bukkit.entity.TNTPrimed;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.inventory.meta.PotionMeta;
@@ -19,6 +20,7 @@ import org.bukkit.potion.PotionType;
 
 import java.util.EnumSet;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 public final class AspectCatalog {
@@ -37,6 +39,10 @@ public final class AspectCatalog {
 
     public DynamicPropertyProfile itemProperties(ItemStack itemStack) {
         return evaluator.evaluateItem(itemStack);
+    }
+
+    public DynamicPropertyProfile itemProperties(Material material) {
+        return evaluator.evaluateBlock(material);
     }
 
     public Set<GraftAspect> blockAspects(Material material) {
@@ -61,13 +67,9 @@ public final class AspectCatalog {
         }
         if (isIce(material)) {
             aspects.add(GraftAspect.FREEZE);
-            aspects.add(GraftAspect.SLIPPERY);
-        }
-        if (material == Material.TNT) {
-            aspects.add(GraftAspect.EXPLOSIVE);
         }
         if (isDoorLike(material)) {
-            aspects.add(GraftAspect.OPEN);
+            aspects.add(GraftAspect.ON_OPEN);
             aspects.add(GraftAspect.ENTRY);
             aspects.add(GraftAspect.EXIT);
         }
@@ -77,16 +79,15 @@ public final class AspectCatalog {
             aspects.add(GraftAspect.ANCHOR);
         }
         if (isContainer(material)) {
-            aspects.add(GraftAspect.OPEN);
             aspects.add(GraftAspect.ON_OPEN);
             aspects.add(GraftAspect.CONTAINER_LINK);
             aspects.add(GraftAspect.DESTINATION);
         }
         if (isPoweredBlock(material)) {
-            aspects.add(GraftAspect.POWERED);
+            aspects.add(GraftAspect.ON_OPEN);
         }
 
-        // All blocks can act as an anchor point
+
         aspects.add(GraftAspect.ANCHOR);
 
         deriveFromProperties(aspects, evaluator.evaluateBlock(material));
@@ -103,25 +104,28 @@ public final class AspectCatalog {
             aspects.add(GraftAspect.GLOW);
         }
         if (entity instanceof LivingEntity livingEntity) {
-            addEffectAspect(aspects, livingEntity, PotionEffectType.SPEED, GraftAspect.SPEED);
-            addEffectAspect(aspects, livingEntity, PotionEffectType.SLOWNESS, GraftAspect.SLOW);
-            addEffectAspect(aspects, livingEntity, PotionEffectType.POISON, GraftAspect.POISON);
-            if (livingEntity.hasPotionEffect(PotionEffectType.REGENERATION)
-                || livingEntity.hasPotionEffect(PotionEffectType.HEALTH_BOOST)
-                || livingEntity.hasPotionEffect(PotionEffectType.ABSORPTION)) {
-                aspects.add(GraftAspect.HEAL);
+            addLivingEffectAspects(aspects, livingEntity);
+        }
+        switch (entity.getType()) {
+            case SLIME, MAGMA_CUBE -> aspects.add(GraftAspect.BOUNCE);
+            case SPIDER, CAVE_SPIDER -> aspects.add(GraftAspect.STICKY);
+            case ENDERMAN -> aspects.add(GraftAspect.CONCEAL);
+            case BLAZE, GHAST -> {
+                aspects.add(GraftAspect.HEAT);
+                aspects.add(GraftAspect.IGNITE);
             }
+            default -> {
+            }
+        }
+        if (entity instanceof TNTPrimed || entity instanceof Creeper) {
+            aspects.add(GraftAspect.HEAT);
         }
         aspects.add(GraftAspect.TETHER);
         if (entity instanceof Mob mob && mob.getTarget() != null) {
             aspects.add(GraftAspect.AGGRO);
-            aspects.add(GraftAspect.TARGET);
-        }
-        if (entity instanceof Tameable tameable && tameable.getOwner() != null) {
-            aspects.add(GraftAspect.OWNER);
         }
 
-        deriveFromProperties(aspects, evaluator.evaluateEntity(entity));
+        deriveEntityTraits(aspects, evaluator.evaluateEntity(entity));
         return Set.copyOf(aspects);
     }
 
@@ -141,6 +145,8 @@ public final class AspectCatalog {
             aspects.addAll(potionAspects(potionMeta));
         }
 
+        deriveFromProperties(aspects, evaluator.evaluateItem(itemStack));
+
         return Set.copyOf(aspects);
     }
 
@@ -153,9 +159,6 @@ public final class AspectCatalog {
         if (material == Material.SPLASH_POTION || material == Material.LINGERING_POTION || material == Material.TIPPED_ARROW) {
             aspects.add(GraftAspect.ON_HIT);
         }
-        if (material == Material.TNT) {
-            aspects.add(GraftAspect.EXPLOSIVE);
-        }
         return Set.copyOf(aspects);
     }
 
@@ -166,9 +169,6 @@ public final class AspectCatalog {
 
         EnumSet<GraftAspect> aspects = EnumSet.of(GraftAspect.ON_HIT, GraftAspect.RECEIVER, GraftAspect.TARGET);
         aspects.add(GraftAspect.TETHER);
-        if (projectile.getShooter() != null) {
-            aspects.add(GraftAspect.OWNER);
-        }
         if (projectile instanceof Fireball) {
             aspects.add(GraftAspect.HEAT);
             aspects.add(GraftAspect.IGNITE);
@@ -192,7 +192,54 @@ public final class AspectCatalog {
         if (center == null || radius <= 0) {
             return Set.of();
         }
-        return Set.of(GraftAspect.ANCHOR, GraftAspect.VOLUME);
+        return Set.of(GraftAspect.ANCHOR);
+    }
+
+    public Set<GraftAspect> fluidAspects(Material material) {
+        if (material == null) {
+            return Set.of();
+        }
+        return switch (material) {
+            case WATER, WATER_CAULDRON -> Set.of(GraftAspect.FREEZE, GraftAspect.SLOW, GraftAspect.ANCHOR);
+            case LAVA, LAVA_CAULDRON -> Set.of(GraftAspect.HEAT, GraftAspect.IGNITE, GraftAspect.LIGHT, GraftAspect.SLOW, GraftAspect.ANCHOR);
+            default -> Set.of();
+        };
+    }
+
+    public DynamicPropertyProfile fluidProperties(Material material) {
+        if (material == null) {
+            return DynamicPropertyProfile.EMPTY;
+        }
+        return switch (material) {
+            case WATER, WATER_CAULDRON -> new DynamicPropertyProfile(Map.of(
+                DynamicProperty.THERMAL, -0.5,
+                DynamicProperty.MASS, 1.0
+            ));
+            case LAVA, LAVA_CAULDRON -> new DynamicPropertyProfile(Map.of(
+                DynamicProperty.THERMAL, 2.0,
+                DynamicProperty.LUMINANCE, 1.0,
+                DynamicProperty.MASS, 3.0
+            ));
+            default -> DynamicPropertyProfile.EMPTY;
+        };
+    }
+
+    public Set<GraftAspect> voidAspects() {
+        return Set.of(GraftAspect.CONCEAL, GraftAspect.LIGHT, GraftAspect.ANCHOR);
+    }
+
+    public DynamicPropertyProfile voidProperties() {
+        return DynamicPropertyProfile.EMPTY;
+    }
+
+    public boolean isFluid(Material material) {
+        if (material == null) {
+            return false;
+        }
+        return switch (material) {
+            case WATER, WATER_CAULDRON, LAVA, LAVA_CAULDRON -> true;
+            default -> false;
+        };
     }
 
     public boolean isContainer(Material material) {
@@ -237,9 +284,45 @@ public final class AspectCatalog {
         };
     }
 
-    private void addEffectAspect(EnumSet<GraftAspect> aspects, LivingEntity livingEntity, PotionEffectType type, GraftAspect aspect) {
-        if (livingEntity.hasPotionEffect(type)) {
-            aspects.add(aspect);
+    private void addLivingEffectAspects(EnumSet<GraftAspect> aspects, LivingEntity livingEntity) {
+        for (PotionEffect effect : livingEntity.getActivePotionEffects()) {
+            PotionEffectType type = effect.getType();
+            if (type.equals(PotionEffectType.SPEED)) {
+                aspects.add(GraftAspect.SPEED);
+            } else if (type.equals(PotionEffectType.SLOWNESS)) {
+                aspects.add(GraftAspect.SLOW);
+            } else if (type.equals(PotionEffectType.POISON)) {
+                aspects.add(GraftAspect.POISON);
+            } else if (type.equals(PotionEffectType.REGENERATION)
+                || type.equals(PotionEffectType.INSTANT_HEALTH)
+                || type.equals(PotionEffectType.HEALTH_BOOST)
+                || type.equals(PotionEffectType.ABSORPTION)
+                || type.equals(PotionEffectType.SATURATION)) {
+                aspects.add(GraftAspect.HEAL);
+            } else if (type.equals(PotionEffectType.INVISIBILITY)) {
+                aspects.add(GraftAspect.CONCEAL);
+            } else if (type.equals(PotionEffectType.GLOWING)) {
+                aspects.add(GraftAspect.GLOW);
+            } else if (type.equals(PotionEffectType.MINING_FATIGUE)) {
+                aspects.add(GraftAspect.HEAVY);
+            } else if (type.equals(PotionEffectType.JUMP_BOOST)) {
+                aspects.add(GraftAspect.BOUNCE);
+            }
+        }
+    }
+
+    private void deriveEntityTraits(EnumSet<GraftAspect> aspects, DynamicPropertyProfile profile) {
+        if (profile.exceeds(DynamicProperty.MASS, 2.5D)) {
+            aspects.add(GraftAspect.HEAVY);
+        }
+        if (profile.get(DynamicProperty.MOTILITY) > 0.55D) {
+            aspects.add(GraftAspect.SPEED);
+        }
+        if (profile.get(DynamicProperty.VITALITY) > 1.5D) {
+            aspects.add(GraftAspect.HEAL);
+        }
+        if (profile.get(DynamicProperty.THERMAL) > 0.5D) {
+            aspects.add(GraftAspect.HEAT);
         }
     }
 
@@ -310,10 +393,10 @@ public final class AspectCatalog {
         if (profile.get(DynamicProperty.LUMINANCE) > 0 && !aspects.contains(GraftAspect.LIGHT)) {
             aspects.add(GraftAspect.LIGHT);
         }
-        if (profile.get(DynamicProperty.VOLATILITY) > 0 && !aspects.contains(GraftAspect.EXPLOSIVE)) {
-            aspects.add(GraftAspect.EXPLOSIVE);
+        if ((profile.get(DynamicProperty.VITALITY) >= 0.75 || profile.get(DynamicProperty.INTEGRITY) >= 1.0) && !aspects.contains(GraftAspect.HEAL)) {
+            aspects.add(GraftAspect.HEAL);
         }
-        if (profile.get(DynamicProperty.MOTILITY) > 0.25) {
+        if (profile.get(DynamicProperty.MOTILITY) > 0.45) {
             aspects.add(GraftAspect.SPEED);
         }
         if (profile.get(DynamicProperty.MOTILITY) > 0 && profile.get(DynamicProperty.MOTILITY) < 0.15) {

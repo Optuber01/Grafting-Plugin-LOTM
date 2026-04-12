@@ -5,12 +5,6 @@ plugins {
 group = 'com.graftingplugin'
 version = '0.1.0-SNAPSHOT'
 
-def paperApiCoordinate = 'io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT'
-def localPaperApi = file('.tools/paper-api/paper-api-1.21.11-R0.1-20260404.205808-87.jar')
-def localDependencyJars = fileTree('.tools/deps') {
-    include '*.jar'
-}
-
 repositories {
     mavenCentral()
     maven {
@@ -20,18 +14,8 @@ repositories {
 }
 
 dependencies {
-    if (localPaperApi.exists()) {
-        compileOnly files(localPaperApi)
-    } else {
-        compileOnly(paperApiCoordinate) {
-            transitive = false
-        }
-    }
-
-    if (!localDependencyJars.isEmpty()) {
-        compileOnly localDependencyJars
-        testImplementation localDependencyJars
-    }
+    compileOnly 'io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT'
+    testImplementation 'io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT'
 }
 
 java {
@@ -50,10 +34,6 @@ sourceSets {
         java.srcDir 'src/test/java'
         resources.srcDir 'src/test/resources'
     }
-}
-
-configurations {
-    testImplementation.extendsFrom compileOnly
 }
 
 processResources {

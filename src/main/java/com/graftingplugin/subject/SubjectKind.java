@@ -9,5 +9,7 @@ public enum SubjectKind {
     CONTAINER,
     LOCATION,
     AREA,
-    CONCEPT
+    CONCEPT,
+    FLUID,
+    VOID
 }

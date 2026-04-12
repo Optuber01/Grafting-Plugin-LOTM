@@ -6,19 +6,16 @@ import org.bukkit.attribute.AttributeInstance;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.Damageable;
+import org.bukkit.potion.PotionEffect;
+import org.bukkit.potion.PotionEffectType;
 
 import java.util.EnumMap;
 import java.util.Map;
 
-/**
- * Evaluates native Bukkit properties into a {@link DynamicPropertyProfile}.
- * <p>
- * Methods try the real Bukkit API first and fall back to name-based heuristics
- * so the code works both on a live server and inside the offline test harness.
- */
+
 public final class DynamicPropertyEvaluator {
 
-    // ── blocks ──────────────────────────────────────────────────────────
 
     public DynamicPropertyProfile evaluateBlock(Material material) {
         if (material == null || isAir(material)) {
@@ -32,7 +29,6 @@ public final class DynamicPropertyEvaluator {
         return new DynamicPropertyProfile(props);
     }
 
-    // ── entities ────────────────────────────────────────────────────────
 
     public DynamicPropertyProfile evaluateEntity(Entity entity) {
         if (entity == null) {
@@ -42,33 +38,48 @@ public final class DynamicPropertyEvaluator {
         if (entity instanceof LivingEntity living) {
             props.put(DynamicProperty.MASS, entityMass(living));
             props.put(DynamicProperty.MOTILITY, entityMotility(living));
+            props.put(DynamicProperty.VITALITY, entityVitality(living));
+            applyLivingEffectProperties(props, living);
         }
         if (entity.getFireTicks() > 0) {
             props.put(DynamicProperty.THERMAL, 1.0);
         }
+        if (entity.isGlowing()) {
+            props.merge(DynamicProperty.LUMINANCE, 0.8D, Double::sum);
+        }
         return new DynamicPropertyProfile(props);
     }
 
-    // ── items ───────────────────────────────────────────────────────────
 
     public DynamicPropertyProfile evaluateItem(ItemStack itemStack) {
         if (itemStack == null || isAir(itemStack.getType())) {
             return DynamicPropertyProfile.EMPTY;
         }
-        return evaluateBlock(itemStack.getType());
+        Map<DynamicProperty, Double> props = new EnumMap<>(DynamicProperty.class);
+        DynamicPropertyProfile materialProfile = evaluateBlock(itemStack.getType());
+        for (DynamicProperty property : DynamicProperty.values()) {
+            double value = materialProfile.get(property);
+            if (value != 0.0D) {
+                props.put(property, value);
+            }
+        }
+        double integrity = itemIntegrity(itemStack);
+        if (integrity > 0.0D) {
+            props.put(DynamicProperty.INTEGRITY, integrity);
+        }
+        return props.isEmpty() ? DynamicPropertyProfile.EMPTY : new DynamicPropertyProfile(props);
     }
 
-    // ── block property helpers ──────────────────────────────────────────
 
     private double blockMass(Material material) {
         double hardness;
         try {
             float rawHardness = material.getHardness();
-            hardness = rawHardness < 0 ? 50.0 : rawHardness; // -1 = indestructible (bedrock)
+            hardness = rawHardness < 0 ? 50.0 : rawHardness;
         } catch (Throwable ignored) {
             hardness = estimateHardness(material);
         }
-        // Normalize: Stone (hardness 1.5) = mass 1.0
+
         return hardness / 1.5;
     }
 
@@ -90,7 +101,6 @@ public final class DynamicPropertyEvaluator {
         return material == Material.TNT ? 1.0 : 0.0;
     }
 
-    // ── entity property helpers ─────────────────────────────────────────
 
     private double entityMass(LivingEntity living) {
         double maxHealth;
@@ -99,7 +109,7 @@ public final class DynamicPropertyEvaluator {
         } catch (Throwable ignored) {
             maxHealth = 20.0;
         }
-        // Normalize: Zombie/Player (health 20.0) = mass 1.0
+
         return maxHealth / 20.0;
     }
 
@@ -110,12 +120,60 @@ public final class DynamicPropertyEvaluator {
                 return attribute.getValue();
             }
         } catch (Throwable ignored) {
-            // Fallback
+
         }
-        return 0.2; // default mob speed
+        return 0.2;
     }
 
-    // ── classification helpers (work offline, no server needed) ──────────
+    private double entityVitality(LivingEntity living) {
+        try {
+            return Math.max(0.0D, living.getHealth()) / 20.0D;
+        } catch (Throwable ignored) {
+            return 1.0D;
+        }
+    }
+
+    private void applyLivingEffectProperties(Map<DynamicProperty, Double> props, LivingEntity living) {
+        try {
+            for (PotionEffect effect : living.getActivePotionEffects()) {
+                int amplifier = effect.getAmplifier() + 1;
+                double durationFactor = Math.min(1.0D, effect.getDuration() / 1200.0D);
+                if (effect.getType().equals(PotionEffectType.SPEED)) {
+                    props.merge(DynamicProperty.MOTILITY, 0.18D * amplifier + 0.08D * durationFactor, Double::sum);
+                } else if (effect.getType().equals(PotionEffectType.SLOWNESS)) {
+                    props.merge(DynamicProperty.MASS, 0.75D * amplifier + 0.2D * durationFactor, Double::sum);
+                    props.merge(DynamicProperty.MOTILITY, -(0.08D * amplifier), Double::sum);
+                } else if (effect.getType().equals(PotionEffectType.POISON)) {
+                    props.merge(DynamicProperty.TOXICITY, 0.7D * amplifier + 0.3D * durationFactor, Double::sum);
+                } else if (effect.getType().equals(PotionEffectType.REGENERATION)
+                    || effect.getType().equals(PotionEffectType.INSTANT_HEALTH)
+                    || effect.getType().equals(PotionEffectType.HEALTH_BOOST)
+                    || effect.getType().equals(PotionEffectType.ABSORPTION)
+                    || effect.getType().equals(PotionEffectType.SATURATION)) {
+                    props.merge(DynamicProperty.VITALITY, 0.7D * amplifier + 0.4D * durationFactor, Double::sum);
+                } else if (effect.getType().equals(PotionEffectType.INVISIBILITY)) {
+                    props.merge(DynamicProperty.OBSCURITY, 0.8D * amplifier + 0.3D * durationFactor, Double::sum);
+                } else if (effect.getType().equals(PotionEffectType.GLOWING)) {
+                    props.merge(DynamicProperty.LUMINANCE, 0.6D * amplifier + 0.2D * durationFactor, Double::sum);
+                }
+            }
+        } catch (Throwable ignored) {
+
+        }
+    }
+
+    private double itemIntegrity(ItemStack itemStack) {
+        if (itemStack == null || itemStack.getType().getMaxDurability() <= 0 || !itemStack.hasItemMeta()) {
+            return 0.0D;
+        }
+        if (!(itemStack.getItemMeta() instanceof Damageable damageable)) {
+            return 0.0D;
+        }
+        int maxDurability = itemStack.getType().getMaxDurability();
+        int remaining = Math.max(0, maxDurability - damageable.getDamage());
+        return (remaining / (double) maxDurability) * 3.0D;
+    }
+
 
     private double estimateHardness(Material material) {
         String name = material.name();
@@ -134,7 +192,7 @@ public final class DynamicPropertyEvaluator {
         if (name.contains("WOOL") || name.contains("CARPET") || name.contains("SPONGE") || name.contains("SNOW")) return 0.2;
         if (name.contains("LAVA") || name.contains("WATER")) return 0.0;
         if (isAir(material)) return 0.0;
-        return 1.0; // unknown solid block default
+        return 1.0;
     }
 
     private boolean isHeatSource(Material material) {

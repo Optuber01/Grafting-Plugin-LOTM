@@ -13,7 +13,9 @@ public final class TestHarness {
         run("RelationGraftPlannerTest", RelationGraftPlannerTest::run);
         run("TopologyGraftPlannerTest", TopologyGraftPlannerTest::run);
         run("SequenceTamperPlannerTest", SequenceTamperPlannerTest::run);
-        System.out.println("All milestone-7 tests passed.");
+        run("GraftFamilyAliasTest", GraftFamilyAliasTest::run);
+        run("FluidVoidSubjectTest", FluidVoidSubjectTest::run);
+        System.out.println("All milestone-8 tests passed.");
     }
 
     private static void run(String name, Runnable test) {

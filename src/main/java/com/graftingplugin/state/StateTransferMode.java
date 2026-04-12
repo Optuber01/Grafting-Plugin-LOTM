@@ -7,5 +7,8 @@ public enum StateTransferMode {
     PROJECTILE_TRAIT,
     PROJECTILE_PAYLOAD,
     PROJECTILE_BOUNCE,
+    ITEM_REPAIR,
+    ITEM_DAMAGE,
+    BLOCK_MANIFEST,
     FIELD
 }

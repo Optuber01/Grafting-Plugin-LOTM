@@ -27,7 +27,7 @@ public final class SubjectResolverTest {
         if (chest.kind() != SubjectKind.CONTAINER) {
             throw new AssertionError("Expected chest to resolve as container, got " + chest.kind());
         }
-        if (!chest.aspects().containsAll(List.of(GraftAspect.OPEN, GraftAspect.ON_OPEN, GraftAspect.CONTAINER_LINK, GraftAspect.DESTINATION))) {
+        if (!chest.aspects().containsAll(List.of(GraftAspect.ON_OPEN, GraftAspect.CONTAINER_LINK, GraftAspect.DESTINATION))) {
             throw new AssertionError("Chest aspects were incomplete: " + chest.aspects());
         }
 

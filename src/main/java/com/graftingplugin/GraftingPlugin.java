@@ -10,6 +10,8 @@ import com.graftingplugin.config.MessageService;
 import com.graftingplugin.config.PluginSettings;
 import com.graftingplugin.focus.FocusItemService;
 import com.graftingplugin.focus.FocusInteractionListener;
+import com.graftingplugin.gui.ConceptCatalogGui;
+import com.graftingplugin.gui.InventorySlotPickerGui;
 import com.graftingplugin.relation.RelationGraftPlanner;
 import com.graftingplugin.relation.RelationGraftService;
 import com.graftingplugin.sequence.SequenceTamperPlanner;
@@ -44,6 +46,8 @@ public final class GraftingPlugin extends JavaPlugin {
     private SequenceTamperPlanner sequenceTamperPlanner;
     private SequenceTamperService sequenceTamperService;
     private FocusInteractionListener focusInteractionListener;
+    private ConceptCatalogGui conceptCatalogGui;
+    private InventorySlotPickerGui inventorySlotPickerGui;
 
     @Override
     public void onEnable() {
@@ -142,6 +146,12 @@ public final class GraftingPlugin extends JavaPlugin {
         if (this.focusInteractionListener == null) {
             this.focusInteractionListener = new FocusInteractionListener(this);
         }
+        if (this.conceptCatalogGui == null) {
+            this.conceptCatalogGui = new ConceptCatalogGui(this);
+        }
+        if (this.inventorySlotPickerGui == null) {
+            this.inventorySlotPickerGui = new InventorySlotPickerGui(this);
+        }
     }
 
     private void registerCommands() {
@@ -160,6 +170,9 @@ public final class GraftingPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(topologyGraftService, this);
         getServer().getPluginManager().registerEvents(sequenceTamperService, this);
         getServer().getPluginManager().registerEvents(focusInteractionListener, this);
+        getServer().getPluginManager().registerEvents(conceptCatalogGui, this);
+        getServer().getPluginManager().registerEvents(inventorySlotPickerGui, this);
+        focusInteractionListener.logStartup();
     }
 
     public PluginSettings settings() {
@@ -220,5 +233,17 @@ public final class GraftingPlugin extends JavaPlugin {
 
     public SequenceTamperService sequenceTamperService() {
         return sequenceTamperService;
+    }
+
+    public ConceptCatalogGui conceptCatalogGui() {
+        return conceptCatalogGui;
+    }
+
+    public InventorySlotPickerGui inventorySlotPickerGui() {
+        return inventorySlotPickerGui;
+    }
+
+    public FocusInteractionListener focusInteractionListener() {
+        return focusInteractionListener;
     }
 }

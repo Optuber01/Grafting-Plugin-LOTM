@@ -19,7 +19,7 @@ public record PluginSettings(
             focusMaterial = Material.BLAZE_ROD;
         }
         String focusName = config.getString("focus.name", "<light_purple>Mystic Focus</light_purple>");
-        int interactionRange = config.getInt("focus.interaction-range", 8);
+        int interactionRange = Math.max(1, config.getInt("focus.interaction-range", 8));
         return new PluginSettings(
             focusMaterial,
             focusName,
