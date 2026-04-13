@@ -320,6 +320,7 @@ public final class FocusInteractionListener implements Listener {
 
 
     private void cycleAspect(Player player) {
+        clearPendingConceptualForPracticalSwitch(player);
         CastSession session = plugin.castSessionManager().session(player.getUniqueId());
         if (session.source() == null) {
             sendActionBar(player, "\u00a7cNo source selected \u2014 Right-Click something first");
@@ -383,6 +384,7 @@ public final class FocusInteractionListener implements Listener {
     }
 
     private void selectSource(Player player, Block clickedBlock, Entity clickedEntity) {
+        clearPendingConceptualForPracticalSwitch(player);
         ResolvedSource source = resolveConcreteSource(player, clickedBlock, clickedEntity);
         source = chooseBetterSourceForFamily(player, source, clickedBlock);
         if (source == null) {
@@ -397,6 +399,7 @@ public final class FocusInteractionListener implements Listener {
     }
 
     private void selectFluidSource(Player player) {
+        clearPendingConceptualForPracticalSwitch(player);
         Block fluidBlock = player.getTargetBlockExact(plugin.settings().interactionRange(), FluidCollisionMode.ALWAYS);
         debugLog(player, "selectFluidSource: targetBlock=%s, type=%s", fluidBlock, fluidBlock != null ? fluidBlock.getType() : "null");
 
@@ -432,6 +435,7 @@ public final class FocusInteractionListener implements Listener {
     }
 
     private void selectSelfSource(Player player) {
+        clearPendingConceptualForPracticalSwitch(player);
         GraftSubject selfSubject = plugin.subjectResolver().resolveEntity(player).orElse(null);
         if (selfSubject == null) {
             debugLog(player, "selectSelfSource: self resolution failed");
@@ -445,6 +449,15 @@ public final class FocusInteractionListener implements Listener {
         Location loc = player.getLocation().add(0, 1, 0);
         player.getWorld().spawnParticle(Particle.ENCHANT, loc, 30, 0.5, 0.5, 0.5, 1.0);
         player.getWorld().spawnParticle(Particle.END_ROD, loc, 10, 0.5, 0.5, 0.5, 0.02);
+    }
+
+    private void clearPendingConceptualForPracticalSwitch(Player player) {
+        if (plugin.conceptCatalogGui().getPendingAction(player) == null) {
+            return;
+        }
+        plugin.conceptCatalogGui().clearPendingAction(player);
+        plugin.messages().send(player, "conceptual-cleared-for-practical");
+        sendActionBar(player, "§8Armed conceptual cast cleared");
     }
 
     private void armSource(Player player, GraftSubject source, CastSourceReference reference) {

@@ -6,6 +6,7 @@ import com.graftingplugin.conceptgraft.ConceptualRuntimeLedger.ActivationGate;
 import com.graftingplugin.gui.ConceptCatalogGui;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.FluidCollisionMode;
+import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Particle;
@@ -31,7 +32,9 @@ import org.bukkit.event.inventory.InventoryOpenEvent;
 import org.bukkit.event.player.PlayerBucketEmptyEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitTask;
@@ -234,6 +237,13 @@ public final class ConceptGraftService implements Listener {
                 placed.getWorld().playSound(loc, Sound.BLOCK_FIRE_EXTINGUISH, 0.5f, 1.5f);
                 plugin.messages().send(event.getPlayer(), "conceptual-nether-water-rejected");
                 sendActionBar(event.getPlayer(), "§cNether law rejects water here");
+                return;
+            }
+            if (zone.type() == ConceptGraftType.OVERWORLD_ZONE && isInZone(loc, zone)) {
+                event.setCancelled(true);
+                allowOverworldWater(event.getPlayer(), event.getHand(), placed);
+                plugin.messages().send(event.getPlayer(), "conceptual-overworld-water-allowed");
+                sendActionBar(event.getPlayer(), "§aOverworld law allows water here");
                 return;
             }
         }
@@ -549,6 +559,29 @@ public final class ConceptGraftService implements Listener {
                 }
             }
         }
+    }
+
+    private void allowOverworldWater(Player player, EquipmentSlot hand, Block placed) {
+        plugin.getServer().getScheduler().runTask(plugin, () -> {
+            if (!player.isOnline() || placed.getWorld() == null) {
+                return;
+            }
+            if (!placed.getType().isAir() && placed.getType() != Material.FIRE) {
+                return;
+            }
+            placed.setType(Material.WATER, false);
+            placed.getWorld().spawnParticle(Particle.HAPPY_VILLAGER, placed.getLocation().add(0.5, 0.5, 0.5), 8, 0.2, 0.2, 0.2, 0.01);
+            placed.getWorld().playSound(placed.getLocation(), Sound.ITEM_BUCKET_EMPTY, 0.7f, 1.2f);
+            if (player.getGameMode() != GameMode.CREATIVE) {
+                ItemStack emptyBucket = new ItemStack(Material.BUCKET);
+                if (hand == EquipmentSlot.OFF_HAND) {
+                    player.getInventory().setItemInOffHand(emptyBucket);
+                } else {
+                    player.getInventory().setItemInMainHand(emptyBucket);
+                }
+                player.updateInventory();
+            }
+        });
     }
 
     private void pulseOverworldZone(ActiveConceptZone zone) {

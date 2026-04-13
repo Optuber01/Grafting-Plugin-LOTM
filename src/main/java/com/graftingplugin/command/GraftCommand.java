@@ -157,6 +157,7 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
             sender.sendMessage("Unknown graft family. Use state, link, location, or event.");
             return;
         }
+        clearPendingConceptualForPractical(player);
         CastSession session = plugin.castSessionManager().session(player.getUniqueId());
         session.clearSelection();
         session.setFamily(family);
@@ -173,15 +174,29 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
             return;
         }
         if (args.length < 2) {
-            plugin.conceptCatalogGui().openConceptualGraftMenu(player);
-            plugin.messages().send(player, "conceptual-menu-opened");
+            player.closeInventory();
+            plugin.getServer().getScheduler().runTask(plugin, () -> {
+                if (!player.isOnline()) {
+                    return;
+                }
+                plugin.conceptCatalogGui().openConceptualGraftMenu(player);
+                plugin.messages().send(player, "conceptual-menu-opened");
+            });
             return;
         }
         if (args[1].equalsIgnoreCase("list")) {
-            plugin.conceptCatalogGui().open(player);
-            plugin.messages().send(player, "practical-concept-catalog-opened");
+            clearPendingConceptualForPractical(player);
+            player.closeInventory();
+            plugin.getServer().getScheduler().runTask(plugin, () -> {
+                if (!player.isOnline()) {
+                    return;
+                }
+                plugin.conceptCatalogGui().open(player);
+                plugin.messages().send(player, "practical-concept-catalog-opened");
+            });
             return;
         }
+        clearPendingConceptualForPractical(player);
         GraftSubject source = plugin.subjectResolver().resolveConcept(args[1]).orElse(null);
         if (source == null) {
             plugin.messages().send(player, "unknown-concept", "concept", args[1]);
@@ -195,6 +210,7 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
         if (player == null) {
             return;
         }
+        clearPendingConceptualForPractical(player);
         plugin.inventorySlotPickerGui().open(player);
         player.sendMessage("\u00a77Pick an item from your inventory to use as the \u00a7eSource\u00a77.");
         player.sendMessage("\u00a78Link mode: Left-Click a chest to deposit it, or /graft target to pick a slot-swap target.");
@@ -206,6 +222,7 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
         if (player == null) {
             return;
         }
+        clearPendingConceptualForPractical(player);
         plugin.inventoryTargetPickerGui().open(player);
         player.sendMessage("\u00a77Pick an inventory slot to use as the \u00a7bTarget\u00a77.");
         player.sendMessage("\u00a78State + Heal: repairs the item in that slot. Link + /graft inventory: swaps two of your own inventory slots.");
@@ -221,6 +238,7 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
             return;
         }
 
+        clearPendingConceptualForPractical(player);
         GraftAspect aspect = GraftAspect.fromInput(args[1]).orElse(null);
         if (aspect == null) {
             plugin.messages().send(player, "invalid-aspect", "aspect", args[1]);
@@ -234,6 +252,7 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
         if (player == null) {
             return;
         }
+        clearPendingConceptualForPractical(player);
         plugin.focusInteractionListener().cycleAspectSelection(player);
     }
 
@@ -242,6 +261,7 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
         if (player == null) {
             return;
         }
+        clearPendingConceptualForPractical(player);
         plugin.focusInteractionListener().selectSelfSourceCommand(player);
     }
 
@@ -251,8 +271,16 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
             return;
         }
         CastSession session = plugin.castSessionManager().session(player.getUniqueId());
+        boolean clearedConceptual = plugin.conceptCatalogGui().getPendingAction(player) != null;
         session.clearSelection();
+        plugin.conceptCatalogGui().clearPendingAction(player);
         plugin.messages().send(player, "selection-cleared", "family", session.family().displayName());
+        if (clearedConceptual) {
+            plugin.messages().send(player, "conceptual-pending-cleared");
+        }
+        if (!plugin.activeGraftRegistry().activeFor(player.getUniqueId()).isEmpty()) {
+            plugin.messages().send(player, "active-grafts-still-running");
+        }
     }
 
     private void handleDebug(CommandSender sender) {
@@ -527,6 +555,14 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
             case "status", "clearactive", "givefocus", "reload" -> true;
             default -> false;
         };
+    }
+
+    private void clearPendingConceptualForPractical(Player player) {
+        if (plugin.conceptCatalogGui().getPendingAction(player) == null) {
+            return;
+        }
+        plugin.conceptCatalogGui().clearPendingAction(player);
+        plugin.messages().send(player, "conceptual-cleared-for-practical");
     }
 
     private Component helpNav(int page) {

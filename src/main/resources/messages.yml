@@ -54,3 +54,7 @@ conceptual-threshold-no-ender-chest: '<red>Threshold → Elsewhere does not supp
 conceptual-threshold-needs-container: '<red>Threshold → Elsewhere needs a container as the first anchor.</red>'
 conceptual-threshold-source-fixed: '<dark_purple><bold>✦</bold> Source threshold fixed.</dark_purple>'
 conceptual-threshold-source-fixed-hint: '<dark_purple>Left-click the destination container to complete the rewrite.</dark_purple>'
+conceptual-cleared-for-practical: '<gray>Armed conceptual cast cleared so you can return to normal grafting.</gray>'
+conceptual-pending-cleared: '<gray>Armed conceptual cast cleared. Active conceptual effects remain until they expire or you use <gold>/graft clearactive</gold>.</gray>'
+active-grafts-still-running: '<gray>Active graft effects are still running. Use <gold>/graft clearactive</gold> if you want to remove active runtime grafts.</gray>'
+conceptual-overworld-water-allowed: '<green>Overworld law lets water exist here.</green>'
