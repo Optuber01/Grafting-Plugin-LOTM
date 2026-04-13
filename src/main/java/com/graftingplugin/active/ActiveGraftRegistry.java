@@ -27,9 +27,42 @@ public final class ActiveGraftRegistry {
         int durationTicks,
         Runnable cleanupAction
     ) {
+        return register(trackingId, ownerId, family, family.name(), family.displayName(), false, aspectName, sourceName, targetName, durationTicks, cleanupAction);
+    }
+
+    public synchronized List<Runnable> register(
+        UUID trackingId,
+        UUID ownerId,
+        GraftFamily family,
+        String familyLabel,
+        boolean conceptual,
+        String aspectName,
+        String sourceName,
+        String targetName,
+        int durationTicks,
+        Runnable cleanupAction
+    ) {
+        return register(trackingId, ownerId, family, conceptual ? "CONCEPTUAL" : family.name(), familyLabel, conceptual, aspectName, sourceName, targetName, durationTicks, cleanupAction);
+    }
+
+    public synchronized List<Runnable> register(
+        UUID trackingId,
+        UUID ownerId,
+        GraftFamily family,
+        String limitScope,
+        String familyLabel,
+        boolean conceptual,
+        String aspectName,
+        String sourceName,
+        String targetName,
+        int durationTicks,
+        Runnable cleanupAction
+    ) {
         Objects.requireNonNull(trackingId, "trackingId");
         Objects.requireNonNull(ownerId, "ownerId");
         Objects.requireNonNull(family, "family");
+        Objects.requireNonNull(limitScope, "limitScope");
+        Objects.requireNonNull(familyLabel, "familyLabel");
         Objects.requireNonNull(aspectName, "aspectName");
         Objects.requireNonNull(sourceName, "sourceName");
         Objects.requireNonNull(targetName, "targetName");
@@ -39,6 +72,9 @@ public final class ActiveGraftRegistry {
             trackingId,
             ownerId,
             family,
+            limitScope,
+            familyLabel,
+            conceptual,
             aspectName,
             sourceName,
             targetName,
@@ -48,7 +84,7 @@ public final class ActiveGraftRegistry {
         );
         byTrackingId.put(trackingId, graft);
         byOwner.computeIfAbsent(ownerId, ignored -> new ArrayList<>()).add(graft);
-        return evictOverflow(ownerId, family);
+        return evictOverflow(ownerId, limitScope, family);
     }
 
     public synchronized void unregister(UUID trackingId) {
@@ -98,17 +134,17 @@ public final class ActiveGraftRegistry {
         byOwner.clear();
     }
 
-    private List<Runnable> evictOverflow(UUID ownerId, GraftFamily family) {
+    private List<Runnable> evictOverflow(UUID ownerId, String limitScope, GraftFamily family) {
         List<RegisteredGraft> ownerEntries = byOwner.get(ownerId);
         if (ownerEntries == null || ownerEntries.isEmpty()) {
             return List.of();
         }
 
         List<RegisteredGraft> familyEntries = ownerEntries.stream()
-            .filter(entry -> entry.family() == family)
+            .filter(entry -> entry.limitScope().equals(limitScope))
             .sorted(Comparator.comparingLong(RegisteredGraft::createdOrder))
             .toList();
-        int overflow = familyEntries.size() - limitFor(family);
+        int overflow = familyEntries.size() - limitFor(limitScope, family);
         if (overflow <= 0) {
             return List.of();
         }
@@ -126,7 +162,10 @@ public final class ActiveGraftRegistry {
         return List.copyOf(cleanupActions);
     }
 
-    private int limitFor(GraftFamily family) {
+    private int limitFor(String limitScope, GraftFamily family) {
+        if ("CONCEPTUAL".equals(limitScope)) {
+            return Integer.MAX_VALUE;
+        }
         return switch (family) {
             case STATE -> 2;
             case RELATION, TOPOLOGY, SEQUENCE -> 1;
@@ -137,6 +176,9 @@ public final class ActiveGraftRegistry {
         UUID trackingId,
         UUID ownerId,
         GraftFamily family,
+        String limitScope,
+        String familyLabel,
+        boolean conceptual,
         String aspectName,
         String sourceName,
         String targetName,
@@ -146,7 +188,7 @@ public final class ActiveGraftRegistry {
     ) {
 
         private ActiveGraftSnapshot snapshot() {
-            return new ActiveGraftSnapshot(trackingId, family, aspectName, sourceName, targetName, createdOrder, expiresAtMillis);
+            return new ActiveGraftSnapshot(trackingId, family, familyLabel, conceptual, aspectName, sourceName, targetName, createdOrder, expiresAtMillis);
         }
     }
 }

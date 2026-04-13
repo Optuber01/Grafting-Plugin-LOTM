@@ -8,5 +8,7 @@ public enum RelationGraftMode {
     TETHER_ENTITY,
     TETHER_LOCATION,
     INVENTORY_DEPOSIT,
+    INVENTORY_HANDOFF,
+    CONTAINER_WITHDRAW,
     SLOT_SWAP
 }

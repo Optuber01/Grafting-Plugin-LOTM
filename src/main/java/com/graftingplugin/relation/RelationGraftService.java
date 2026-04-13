@@ -82,11 +82,18 @@ public final class RelationGraftService implements Listener {
         if (plan == null) {
             return false;
         }
+        if ((plan.mode() == RelationGraftMode.INVENTORY_HANDOFF || plan.mode() == RelationGraftMode.CONTAINER_WITHDRAW)
+            && !(targetEntity instanceof Player)) {
+            caster.sendMessage("§cThat practical flow only works with a player inventory as the target.");
+            return false;
+        }
 
         boolean success = switch (plan.mode()) {
             case MOB_AGGRO -> applyAggroRedirect(caster, source, aspect, sourceReference, targetEntity, target.subject().displayName(), plan.modifier());
             case PROJECTILE_RETARGET_ENTITY -> applyProjectileRetargetToEntity(caster, source, aspect, sourceReference, targetEntity, target.subject().displayName(), plan.modifier());
             case TETHER_ENTITY -> applyTetherToEntity(caster, source, aspect, sourceReference, targetEntity, target.subject().displayName(), plan.modifier());
+            case INVENTORY_HANDOFF -> applyInventoryHandoff(caster, source, sourceReference, targetEntity, target.subject().displayName());
+            case CONTAINER_WITHDRAW -> applyContainerWithdraw(caster, source, sourceReference, targetEntity, target.subject().displayName());
             default -> false;
         };
         if (!success) {
@@ -516,6 +523,8 @@ public final class RelationGraftService implements Listener {
             case CONTAINER_ROUTE -> "Container route active for " + formatSeconds((int) Math.round(settings.containerDurationTicks() * mod.durationMultiplier())) + ".";
             case TETHER_ENTITY, TETHER_LOCATION -> "Tether active for " + formatSeconds((int) Math.round(settings.tetherDurationTicks() * mod.durationMultiplier())) + " with pull strength " + formatDecimal(settings.tetherStrength() * mod.intensity()) + ".";
             case INVENTORY_DEPOSIT -> "Item deposited into container.";
+            case INVENTORY_HANDOFF -> "Item handed into the target player's inventory.";
+            case CONTAINER_WITHDRAW -> "First available stack withdrawn from the container into the target player's inventory.";
             case SLOT_SWAP -> "Items swapped between slots.";
         };
     }
@@ -708,6 +717,87 @@ public final class RelationGraftService implements Listener {
         ));
         caster.playSound(caster.getLocation(), Sound.ENTITY_ITEM_PICKUP, 0.8f, 1.0f);
         return true;
+    }
+
+    private boolean applyInventoryHandoff(Player caster, GraftSubject source, CastSourceReference sourceReference, Entity targetEntity, String targetName) {
+        if (!sourceReference.hasInventorySlot() || !(targetEntity instanceof Player targetPlayer)) {
+            return false;
+        }
+        int slot = sourceReference.inventorySlot();
+        ItemStack item = caster.getInventory().getStorageContents()[slot];
+        if (item == null || item.getType().isAir()) {
+            caster.sendMessage("\u00a7cThat inventory slot is now empty.");
+            return false;
+        }
+        int moved = transferIntoTarget(targetPlayer.getInventory(), item);
+        if (moved <= 0) {
+            caster.sendMessage("\u00a7c" + targetPlayer.getName() + " has no room for " + source.displayName() + ".");
+            return false;
+        }
+        ItemStack remaining = item.clone();
+        remaining.setAmount(item.getAmount() - moved);
+        if (remaining.getAmount() <= 0) {
+            caster.getInventory().setItem(slot, null);
+        } else {
+            caster.getInventory().setItem(slot, remaining);
+        }
+        caster.updateInventory();
+        targetPlayer.updateInventory();
+        plugin.messages().send(caster, "item-handed-off", java.util.Map.of(
+            "item", source.displayName(),
+            "target", targetPlayer.getName()
+        ));
+        targetPlayer.sendMessage("\u00a7b" + source.displayName() + " \u00a77was grafted into your inventory by \u00a76" + caster.getName() + "\u00a77.");
+        caster.playSound(caster.getLocation(), Sound.ENTITY_ITEM_PICKUP, 0.8f, 1.15f);
+        targetPlayer.playSound(targetPlayer.getLocation(), Sound.ENTITY_ITEM_PICKUP, 0.8f, 1.05f);
+        return true;
+    }
+
+    private boolean applyContainerWithdraw(Player caster, GraftSubject source, CastSourceReference sourceReference, Entity targetEntity, String targetName) {
+        if (!(targetEntity instanceof Player targetPlayer)) {
+            return false;
+        }
+        Block sourceBlock = resolveSourceBlock(sourceReference);
+        if (sourceBlock == null || !(sourceBlock.getState() instanceof Container container)) {
+            return false;
+        }
+        Inventory containerInventory = container.getInventory();
+        int firstFilledSlot = firstFilledSlot(containerInventory);
+        if (firstFilledSlot < 0) {
+            caster.sendMessage("\u00a7cThat container has nothing to withdraw.");
+            return false;
+        }
+        ItemStack item = containerInventory.getItem(firstFilledSlot);
+        if (item == null || item.getType().isAir()) {
+            return false;
+        }
+        int moved = transferIntoTarget(targetPlayer.getInventory(), item);
+        if (moved <= 0) {
+            caster.sendMessage("\u00a7c" + targetPlayer.getName() + " has no room for the withdrawn stack.");
+            return false;
+        }
+        ItemStack remaining = item.clone();
+        remaining.setAmount(item.getAmount() - moved);
+        containerInventory.setItem(firstFilledSlot, remaining.getAmount() <= 0 ? null : remaining);
+        targetPlayer.updateInventory();
+        plugin.messages().send(caster, "container-withdrawn", java.util.Map.of(
+            "source", source.displayName(),
+            "target", targetPlayer.getName()
+        ));
+        targetPlayer.sendMessage("\u00a7bA stack from \u00a76" + source.displayName() + " \u00a77was grafted into your inventory by \u00a76" + caster.getName() + "\u00a77.");
+        caster.playSound(caster.getLocation(), Sound.ENTITY_ITEM_PICKUP, 0.8f, 0.95f);
+        targetPlayer.playSound(targetPlayer.getLocation(), Sound.ENTITY_ITEM_PICKUP, 0.8f, 0.9f);
+        return true;
+    }
+
+    private int firstFilledSlot(Inventory inventory) {
+        for (int slot = 0; slot < inventory.getSize(); slot++) {
+            ItemStack item = inventory.getItem(slot);
+            if (!isEmpty(item)) {
+                return slot;
+            }
+        }
+        return -1;
     }
 
     private void clearAggroRedirect(UUID sourceId, boolean restorePreviousTarget) {

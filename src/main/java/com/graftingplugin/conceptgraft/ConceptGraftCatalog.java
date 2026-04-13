@@ -37,7 +37,9 @@ public final class ConceptGraftCatalog {
         defs.put(ConceptGraftType.NETHER_ZONE, new ConceptGraftDefinition(ConceptGraftType.NETHER_ZONE, Material.NETHERRACK, "nether"));
         defs.put(ConceptGraftType.END_ZONE, new ConceptGraftDefinition(ConceptGraftType.END_ZONE, Material.END_STONE, "end-dimension"));
         defs.put(ConceptGraftType.OVERWORLD_ZONE, new ConceptGraftDefinition(ConceptGraftType.OVERWORLD_ZONE, Material.GRASS_BLOCK, "overworld"));
+        defs.put(ConceptGraftType.CONCEALMENT_TO_RECOGNITION, new ConceptGraftDefinition(ConceptGraftType.CONCEALMENT_TO_RECOGNITION, Material.BLACK_CANDLE, "concealment"));
         defs.put(ConceptGraftType.BEGINNING_TO_END, new ConceptGraftDefinition(ConceptGraftType.BEGINNING_TO_END, Material.CLOCK, "beginning"));
+        defs.put(ConceptGraftType.THRESHOLD_TO_ELSEWHERE, new ConceptGraftDefinition(ConceptGraftType.THRESHOLD_TO_ELSEWHERE, Material.ENDER_CHEST, "distance"));
         return Map.copyOf(defs);
     }
 }

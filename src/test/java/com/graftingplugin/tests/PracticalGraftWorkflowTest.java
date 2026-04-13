@@ -23,8 +23,9 @@ public final class PracticalGraftWorkflowTest {
         GraftSubject inventoryItem = new GraftSubject("item:diamond_sword", "Diamond Sword", SubjectKind.ITEM, Set.of(GraftAspect.RECEIVER));
         GraftSubject potionItem = new GraftSubject("item:potion", "Potion", SubjectKind.POTION, Set.of(GraftAspect.RECEIVER));
         GraftSubject targetItem = new GraftSubject("item:iron_pickaxe", "Iron Pickaxe", SubjectKind.ITEM, Set.of(GraftAspect.RECEIVER));
-        GraftSubject chest = new GraftSubject("container:chest", "Chest", SubjectKind.CONTAINER, Set.of(GraftAspect.DESTINATION, GraftAspect.CONTAINER_LINK));
+        GraftSubject chest = new GraftSubject("container:chest", "Chest", SubjectKind.CONTAINER, Set.of(GraftAspect.DESTINATION, GraftAspect.CONTAINER_LINK, GraftAspect.RECEIVER));
         GraftSubject barrel = new GraftSubject("container:barrel", "Barrel", SubjectKind.CONTAINER, Set.of(GraftAspect.DESTINATION, GraftAspect.CONTAINER_LINK));
+        GraftSubject playerTarget = new GraftSubject("entity:player", "Player", SubjectKind.ENTITY, Set.of());
 
         RelationGraftPlan invToChest = relPlanner.plan(GraftAspect.RECEIVER, inventoryItem, chest).orElseThrow(
             () -> new AssertionError("RECEIVER on ITEM->CONTAINER should plan INVENTORY_DEPOSIT")
@@ -47,6 +48,20 @@ public final class PracticalGraftWorkflowTest {
             throw new AssertionError("Expected SLOT_SWAP, got " + slotSwap.mode());
         }
 
+        RelationGraftPlan itemToPlayer = relPlanner.plan(GraftAspect.RECEIVER, inventoryItem, playerTarget).orElseThrow(
+            () -> new AssertionError("RECEIVER on ITEM->ENTITY should plan INVENTORY_HANDOFF")
+        );
+        if (itemToPlayer.mode() != RelationGraftMode.INVENTORY_HANDOFF) {
+            throw new AssertionError("Expected INVENTORY_HANDOFF, got " + itemToPlayer.mode());
+        }
+
+        RelationGraftPlan chestToPlayer = relPlanner.plan(GraftAspect.RECEIVER, chest, playerTarget).orElseThrow(
+            () -> new AssertionError("RECEIVER on CONTAINER->ENTITY should plan CONTAINER_WITHDRAW")
+        );
+        if (chestToPlayer.mode() != RelationGraftMode.CONTAINER_WITHDRAW) {
+            throw new AssertionError("Expected CONTAINER_WITHDRAW, got " + chestToPlayer.mode());
+        }
+
         RelationGraftPlan chestToChest = relPlanner.plan(GraftAspect.DESTINATION, chest, barrel).orElseThrow(
             () -> new AssertionError("DESTINATION on CONTAINER->CONTAINER should plan CONTAINER_ROUTE")
         );
@@ -59,10 +74,6 @@ public final class PracticalGraftWorkflowTest {
         );
         if (containerLink.mode() != RelationGraftMode.CONTAINER_ROUTE) {
             throw new AssertionError("Expected CONTAINER_ROUTE for CONTAINER_LINK, got " + containerLink.mode());
-        }
-
-        if (relPlanner.plan(GraftAspect.RECEIVER, inventoryItem, new GraftSubject("entity:zombie", "Zombie", SubjectKind.ENTITY, Set.of())).isPresent()) {
-            throw new AssertionError("RECEIVER on ITEM->ENTITY should not plan");
         }
 
         GraftSubject damageable = new GraftSubject("item:iron_sword", "Iron Sword", SubjectKind.ITEM, Set.of(GraftAspect.RECEIVER));

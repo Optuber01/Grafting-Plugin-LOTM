@@ -36,6 +36,19 @@ Also define a small manual Paper smoke test for:
 - Do not add temp scripts or clutter.
 - Do not add code comments.
 
+## Manual smoke checklist
+1. Give yourself a focus with `/graft givefocus`.
+2. Open `/graft concept` and place one zone law.
+3. Confirm the placement preview shows a center and rough radius before the cast lands.
+4. Run `/graft active` and confirm the entry appears under the conceptual section with a conceptual label.
+5. Open `/graft inspect` and confirm practical setup remains separate from any armed conceptual cast.
+6. Arm **Beginning ↔ End**, confirm the second-anchor preview is visible, then walk through both anchors to verify teleporting and trigger feedback.
+7. Arm **Threshold → Elsewhere** on two containers, open the source container, and confirm the destination inventory opens instead.
+8. Arm **Concealment → Recognition** around hostile mobs and confirm their target recognition toward players is cancelled while inside the zone.
+9. Run `/graft clearactive` and confirm all conceptual entries disappear from `/graft active`.
+10. Place another conceptual graft, run `/graft reload`, and confirm conceptual state is cleared cleanly.
+11. Repeat one practical graft flow and confirm it still appears under the practical section without mixing labels.
+
 ## Acceptance criteria
 - Automated checks cover conceptual lifecycle rules, not just catalog/settings loading.
 - There is a repeatable manual smoke test for conceptual runtime behavior.

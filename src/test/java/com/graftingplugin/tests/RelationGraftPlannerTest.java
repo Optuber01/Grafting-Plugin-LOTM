@@ -35,14 +35,17 @@ public final class RelationGraftPlannerTest {
             Set.of(GraftAspect.TARGET, GraftAspect.RECEIVER, GraftAspect.TETHER),
             new DynamicPropertyProfile(Map.of(DynamicProperty.MOTILITY, 0.5))
         );
-        GraftSubject chest = new GraftSubject("container:chest", "Chest", SubjectKind.CONTAINER, Set.of(GraftAspect.DESTINATION, GraftAspect.CONTAINER_LINK));
+        GraftSubject chest = new GraftSubject("container:chest", "Chest", SubjectKind.CONTAINER, Set.of(GraftAspect.DESTINATION, GraftAspect.CONTAINER_LINK, GraftAspect.RECEIVER));
         GraftSubject barrel = new GraftSubject("container:barrel", "Barrel", SubjectKind.CONTAINER, Set.of());
         GraftSubject anchor = new GraftSubject("location:test", "Anchor", SubjectKind.LOCATION, Set.of(GraftAspect.ANCHOR));
+        GraftSubject sword = new GraftSubject("item:iron_sword", "Iron Sword", SubjectKind.ITEM, Set.of(GraftAspect.RECEIVER));
 
         assertMode(planner, GraftAspect.AGGRO, zombie, villager, RelationGraftMode.MOB_AGGRO);
         assertMode(planner, GraftAspect.TARGET, arrow, villager, RelationGraftMode.PROJECTILE_RETARGET_ENTITY);
         assertMode(planner, GraftAspect.DESTINATION, chest, barrel, RelationGraftMode.CONTAINER_ROUTE);
         assertMode(planner, GraftAspect.TETHER, zombie, anchor, RelationGraftMode.TETHER_LOCATION);
+        assertMode(planner, GraftAspect.RECEIVER, sword, villager, RelationGraftMode.INVENTORY_HANDOFF);
+        assertMode(planner, GraftAspect.RECEIVER, chest, villager, RelationGraftMode.CONTAINER_WITHDRAW);
 
         RelationGraftPlan targetPlan = planner.plan(GraftAspect.TARGET, arrow, villager).orElseThrow();
         assertClose(targetPlan.modifier().durationMultiplier(), 1.25, "Projectile retarget should scale duration from motility");

@@ -68,7 +68,7 @@ public final class ConceptCatalogGui implements Listener {
                 .decoration(TextDecoration.ITALIC, false));
             List<Component> lore = new ArrayList<>();
             lore.add(Component.text("Open the routine concept catalog", NamedTextColor.DARK_GRAY).decoration(TextDecoration.ITALIC, false));
-            lore.add(Component.text("for everyday aspect-based grafts.", NamedTextColor.DARK_GRAY).decoration(TextDecoration.ITALIC, false));
+            lore.add(Component.text("for everyday practical aspect grafts.", NamedTextColor.DARK_GRAY).decoration(TextDecoration.ITALIC, false));
             practicalMeta.lore(lore);
             practicalMeta.getPersistentDataContainer().set(
                 new NamespacedKey(plugin, "gui_action"), PersistentDataType.STRING, "open_practical");
@@ -81,6 +81,14 @@ public final class ConceptCatalogGui implements Listener {
 
     public PendingConceptAction getPendingAction(Player player) {
         return pendingActions.get(player.getUniqueId());
+    }
+
+    public void setPendingAction(Player player, PendingConceptAction action) {
+        if (action == null) {
+            pendingActions.remove(player.getUniqueId());
+            return;
+        }
+        pendingActions.put(player.getUniqueId(), action);
     }
 
     public void clearPendingAction(Player player) {
@@ -199,17 +207,26 @@ public final class ConceptCatalogGui implements Listener {
 
         player.closeInventory();
 
-        if (selectedType.requiresTwoAnchors()) {
-            pendingActions.put(player.getUniqueId(), new PendingConceptAction(selectedType, player.getLocation().clone()));
-            player.sendMessage("\u00a75\u00a7l\u2726 Beginning anchor set at your position.");
-            player.sendMessage("\u00a75  Left-Click a block to set the End anchor and identify them as one place.");
-            player.sendMessage("\u00a78  Shift+Left-Click air to cancel.");
-        } else {
+        if (!selectedType.requiresTwoAnchors()) {
             pendingActions.put(player.getUniqueId(), new PendingConceptAction(selectedType, null));
             player.sendMessage("\u00a75\u00a7l\u2726 " + selectedType.displayName() + " law selected.");
             player.sendMessage("\u00a75  Left-Click a block or the ground to impose that law on the zone.");
             player.sendMessage("\u00a78  Shift+Left-Click air to cancel.");
+            return;
         }
+
+        if (selectedType.firstAnchorComesFromCaster()) {
+            pendingActions.put(player.getUniqueId(), new PendingConceptAction(selectedType, player.getLocation().clone()));
+            player.sendMessage("\u00a75\u00a7l\u2726 First anchor fixed at your position.");
+            player.sendMessage("\u00a75  Left-Click a second anchor to identify both locations as one place.");
+            player.sendMessage("\u00a78  Shift+Left-Click air to cancel.");
+            return;
+        }
+
+        pendingActions.put(player.getUniqueId(), new PendingConceptAction(selectedType, null));
+        player.sendMessage("\u00a75\u00a7l\u2726 " + selectedType.displayName() + " rewrite selected.");
+        player.sendMessage("\u00a75  Left-Click the source container, then Left-Click the destination container.");
+        player.sendMessage("\u00a78  Shift+Left-Click air to cancel.");
     }
 
     private ItemStack createGraftIcon(ConceptGraftDefinition graft) {
@@ -222,10 +239,15 @@ public final class ConceptCatalogGui implements Listener {
             lore.add(Component.empty());
             lore.add(Component.text(graft.description(), NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false));
             lore.add(Component.empty());
-            if (graft.type().requiresTwoAnchors()) {
-                lore.add(Component.text("Identifies two locations as one", NamedTextColor.GOLD).decoration(TextDecoration.ITALIC, false));
-            } else {
+            if (!graft.type().requiresTwoAnchors()) {
                 lore.add(Component.text("Imposes a law over a zone", NamedTextColor.GOLD).decoration(TextDecoration.ITALIC, false));
+                lore.add(Component.text("Left-Click a center point to place it", NamedTextColor.DARK_GRAY).decoration(TextDecoration.ITALIC, false));
+            } else if (graft.type().firstAnchorComesFromCaster()) {
+                lore.add(Component.text("Identifies two locations as one path", NamedTextColor.GOLD).decoration(TextDecoration.ITALIC, false));
+                lore.add(Component.text("First anchor is your current position", NamedTextColor.DARK_GRAY).decoration(TextDecoration.ITALIC, false));
+            } else {
+                lore.add(Component.text("Rewrites one threshold to open elsewhere", NamedTextColor.GOLD).decoration(TextDecoration.ITALIC, false));
+                lore.add(Component.text("Requires two container anchors", NamedTextColor.DARK_GRAY).decoration(TextDecoration.ITALIC, false));
             }
             lore.add(Component.empty());
             lore.add(Component.text("Click to begin", NamedTextColor.LIGHT_PURPLE).decoration(TextDecoration.ITALIC, false));
@@ -290,7 +312,12 @@ public final class ConceptCatalogGui implements Listener {
         return ((value + 8) / 9) * 9;
     }
 
-    public record PendingConceptAction(ConceptGraftType type, Location firstAnchor) {}
+    public record PendingConceptAction(ConceptGraftType type, Location firstAnchor) {
+
+        public PendingConceptAction withFirstAnchor(Location updatedFirstAnchor) {
+            return new PendingConceptAction(type, updatedFirstAnchor);
+        }
+    }
 
     private static final class ConceptHolder implements InventoryHolder {
         @Override

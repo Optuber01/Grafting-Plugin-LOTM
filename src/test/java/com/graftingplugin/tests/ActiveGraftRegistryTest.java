@@ -18,6 +18,7 @@ public final class ActiveGraftRegistryTest {
         testSingleSlotFamiliesReplaceOldest();
         testUnregisterRemovesActiveGraft();
         testClearOwnerRunsCleanupAndRemovesEntries();
+        testConceptualEntriesKeepDistinctPresentationAndLimitScope();
     }
 
     private static void testStateLimitReplacesOldest() {
@@ -98,6 +99,30 @@ public final class ActiveGraftRegistryTest {
         }
         if (!registry.activeFor(ownerId).isEmpty()) {
             throw new AssertionError("clearOwner should remove all active graft entries for the owner");
+        }
+    }
+
+    private static void testConceptualEntriesKeepDistinctPresentationAndLimitScope() {
+        ActiveGraftRegistry registry = new ActiveGraftRegistry();
+        UUID ownerId = UUID.randomUUID();
+
+        UUID practicalTopology = UUID.randomUUID();
+        UUID conceptualTopology = UUID.randomUUID();
+        registry.register(practicalTopology, ownerId, GraftFamily.TOPOLOGY, "Anchor", "Door", "Hall", 200, () -> {
+        });
+        registry.register(conceptualTopology, ownerId, GraftFamily.TOPOLOGY, "Conceptual Law", true, "Sun → Ground", "solar law", "world @ 0, 64, 0", 200, () -> {
+        });
+
+        List<ActiveGraftSnapshot> active = registry.activeFor(ownerId);
+        if (active.size() != 2) {
+            throw new AssertionError("Conceptual entries should not evict practical topology entries");
+        }
+        ActiveGraftSnapshot conceptual = active.stream()
+            .filter(ActiveGraftSnapshot::conceptual)
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("Expected a conceptual active entry"));
+        if (!"Conceptual Law".equals(conceptual.familyLabel())) {
+            throw new AssertionError("Expected conceptual family label to be preserved");
         }
     }
 }

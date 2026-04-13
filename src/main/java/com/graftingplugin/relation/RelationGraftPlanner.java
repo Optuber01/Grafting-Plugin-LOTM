@@ -55,9 +55,13 @@ public final class RelationGraftPlanner {
         if (sourceKind == SubjectKind.ITEM || sourceKind == SubjectKind.POTION) {
             return switch (targetKind) {
                 case CONTAINER -> Optional.of(new RelationGraftPlan(aspect, sourceKind, targetKind, RelationGraftMode.INVENTORY_DEPOSIT, "Deposit the item into the target container.", modifier));
+                case ENTITY -> Optional.of(new RelationGraftPlan(aspect, sourceKind, targetKind, RelationGraftMode.INVENTORY_HANDOFF, "Hand the selected item into a player's inventory.", modifier));
                 case ITEM, POTION -> Optional.of(new RelationGraftPlan(aspect, sourceKind, targetKind, RelationGraftMode.SLOT_SWAP, "Swap the item into the selected target slot.", modifier));
                 default -> Optional.empty();
             };
+        }
+        if (sourceKind == SubjectKind.CONTAINER && targetKind == SubjectKind.ENTITY) {
+            return Optional.of(new RelationGraftPlan(aspect, sourceKind, targetKind, RelationGraftMode.CONTAINER_WITHDRAW, "Withdraw the first present stack into a player's inventory.", modifier));
         }
         return Optional.empty();
     }

@@ -61,18 +61,20 @@ Practical concept sources (Sun, Frost, Gravity, etc.) are a way to pick a source
 
 ## Conceptual grafting
 
-Conceptual grafts are a separate, high-impact layer above practical grafting. They graft environmental rules and dimensional identity onto localized zones.
+Conceptual grafts are a separate, high-impact layer above practical grafting. They impose localized laws, transfer place-identity, and rewrite relationships between things.
 
 Open the conceptual graft menu with `/graft concept`. From there, pick a conceptual graft type:
 
-- **Sun → Ground** — daylight, burning undead, melting ice, accelerated growth
-- **Sky → Ground** — levitation, no fall damage, upward drift
-- **Nether → Zone** — water evaporates, eternal fire, fire resistance
-- **End → Zone** — random micro-teleports, void echoes, ender resonance
-- **Overworld → Zone** — cancel alien rules, restore natural law
-- **Beginning ↔ End** — spatial cycle between two anchors
+- **Sun → Ground** — solar law: light dominates, cold fails, undead burn, growth accelerates
+- **Sky → Ground** — sky law: falling is denied and unsupported weight cannot descend
+- **Nether → Zone** — nether law: water cannot exist and heat protects instead of harms
+- **End → Zone** — end law: positions become unstable for everyone inside
+- **Overworld → Zone** — foreign law is stripped and natural order is restored
+- **Concealment → Recognition** — hostile recognition in the zone loses players as valid targets
+- **Beginning ↔ End** — two places are treated as one route; what reaches one may finish at the other
+- **Threshold → Elsewhere** — one container threshold opens another container's contents elsewhere
 
-After selecting a conceptual graft, left-click a block with the focus to place the zone. Beginning ↔ End requires two anchors: the first is set at your position, the second by left-clicking.
+After selecting a conceptual graft, left-click with the focus to place it. Zone laws take a center point. Beginning ↔ End fixes the first anchor at your current position and takes the second anchor on left-click. Threshold → Elsewhere takes two container anchors: source first, destination second.
 
 Conceptual grafts are:
 - rare (one active per player by default, with a cooldown)
@@ -137,6 +139,8 @@ Current behavior includes:
 - retargeting projectiles to entities or anchor locations
 - tethering entities or projectiles to entities or locations
 - routing inserted items from one container into another
+- handing a selected inventory item directly into another player's inventory
+- withdrawing the first available stack from a container into a player's inventory
 
 ### Location Graft
 
@@ -191,11 +195,12 @@ The last four (`sky`, `nether`, `end-dimension`, `overworld`) are used as concep
 - Runtime graft state is cleared on plugin disable and reload.
 - Active graft tracking is in-memory only.
 - Family limits are enforced per player by the active registry.
-- Conceptual graft zones and loops are tracked separately with their own cooldowns and limits.
+- Conceptual grafts report separately from practical grafts in `/graft active` and `/graft status`.
+- Conceptual laws, loops, and rewrites use their own cooldowns and max-active limit.
 
 ## Current limits
 
 - This is an authored aspect system, not a freeform text-to-effect engine.
 - Event Graft is intentionally limited to **On Hit** and **On Open**.
-- Conceptual grafts are intentionally limited to six types with zone-based effects.
+- Conceptual grafts remain an authored set of rare laws, identities, and rewrites rather than a freeform engine.
 - Active graft reporting covers retained runtime state, not every one-shot side effect.

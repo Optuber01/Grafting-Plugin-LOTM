@@ -13,6 +13,7 @@ import org.bukkit.Location;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
 import org.bukkit.block.Block;
+import org.bukkit.block.Container;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
@@ -80,16 +81,44 @@ public final class FocusInteractionListener implements Listener {
         if (pending != null) {
             if (player.isSneaking() && action == Action.LEFT_CLICK_AIR) {
                 plugin.conceptCatalogGui().clearPendingAction(player);
-                player.sendMessage("\u00a78Conceptual graft cancelled.");
+                player.sendMessage("\u00a78Conceptual casting cancelled.");
+                sendActionBar(player, "\u00a78Conceptual casting cancelled");
                 return;
             }
-            Location targetLoc = targetBlock != null ? targetBlock.getLocation().add(0.5, 1.0, 0.5) : player.getLocation();
-            if (pending.type().requiresTwoAnchors()) {
-                plugin.conceptGraftService().activateLoop(player, pending.firstAnchor(), targetLoc);
-            } else {
-                plugin.conceptGraftService().activateZone(player, pending.type(), targetLoc);
+            Location targetLoc = pending.type().placementStyle() == com.graftingplugin.conceptgraft.ConceptPlacementStyle.DUAL_ANCHOR_BLOCKS
+                ? (targetBlock != null ? targetBlock.getLocation().add(0.5, 0.5, 0.5) : player.getLocation())
+                : (targetBlock != null ? targetBlock.getLocation().add(0.5, 1.0, 0.5) : player.getLocation());
+            boolean activated;
+            if (!pending.type().requiresTwoAnchors()) {
+                activated = plugin.conceptGraftService().activateZone(player, pending.type(), targetLoc);
+                if (activated) {
+                    plugin.conceptCatalogGui().clearPendingAction(player);
+                }
+                return;
             }
-            plugin.conceptCatalogGui().clearPendingAction(player);
+            if (pending.type().firstAnchorComesFromCaster()) {
+                activated = plugin.conceptGraftService().activateAnchoredGraft(player, pending.type(), pending.firstAnchor(), targetLoc);
+                if (activated) {
+                    plugin.conceptCatalogGui().clearPendingAction(player);
+                }
+                return;
+            }
+            if (pending.firstAnchor() == null) {
+                if (!(targetBlock != null && targetBlock.getState() instanceof Container)) {
+                    player.sendMessage("\u00a7cThreshold → Elsewhere needs a container as the first anchor.");
+                    sendActionBar(player, "\u00a7cChoose a container as the source threshold");
+                    return;
+                }
+                plugin.conceptCatalogGui().setPendingAction(player, pending.withFirstAnchor(targetLoc));
+                player.sendMessage("\u00a75\u00a7l\u2726 Source threshold fixed.");
+                player.sendMessage("\u00a75  Left-Click the destination container to complete the rewrite.");
+                sendActionBar(player, "\u00a75Source threshold fixed \u00a78| \u00a7dchoose destination");
+                return;
+            }
+            activated = plugin.conceptGraftService().activateAnchoredGraft(player, pending.type(), pending.firstAnchor(), targetLoc);
+            if (activated) {
+                plugin.conceptCatalogGui().clearPendingAction(player);
+            }
             return;
         }
 

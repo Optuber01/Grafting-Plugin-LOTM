@@ -88,12 +88,14 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
                 sender.sendMessage("§7  Concrete  §f-> Right-Click a block, entity, or container");
                 sender.sendMessage("§7  Concept   §f-> /graft concept <name> or /graft concept list");
                 sender.sendMessage("§7  Inventory §f-> /graft inventory opens your item picker as source");
-                sender.sendMessage("§8  /graft concept alone opens the §5Conceptual Graft§8 menu (rare, law imposition).");
+                sender.sendMessage("§8  /graft concept alone opens the §5Conceptual Graft§8 menu for rare laws and rewrites.");
             }
             case 2 -> {
                 sender.sendMessage("§d§lPractical Graft Workflows:");
                 sender.sendMessage("§7  Item repair: §fMode state, Heal aspect, Left-Click offhand item OR /graft target.");
                 sender.sendMessage("§7  Inv slot -> Chest: §e/graft inventory §f-> pick item, mode link, Left-Click chest.");
+                sender.sendMessage("§7  Inv slot -> Player: §e/graft inventory §f-> pick item, mode link, Left-Click a player.");
+                sender.sendMessage("§7  Chest -> Player: §fMode link, Right-Click source chest, Left-Click a player.");
                 sender.sendMessage("§7  Chest -> Chest: §fMode link, Right-Click source chest, Left-Click target chest.");
                 sender.sendMessage("§7  Slot -> Slot (your inventory): §e/graft inventory §f+ §e/graft target §f-> picks both slots, then Left-Click.");
                 sender.sendMessage("");
@@ -122,13 +124,14 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
                 sender.sendMessage("§e  /graft reload §f-> Reload config");
                 sender.sendMessage("");
                 sender.sendMessage("§d§lConceptual Grafting:");
-                sender.sendMessage("§7  /graft concept §f-> Opens the §5Conceptual Graft§f menu (rare, high-impact law imposition).");
+                sender.sendMessage("§7  /graft concept §f-> Opens the §5Conceptual Graft§f menu for rare laws, identities, and rewrites.");
                 sender.sendMessage("§7  /graft concept list §f-> Opens the practical concept catalog.");
                 sender.sendMessage("§7  /graft concept <name> §f-> Directly selects a practical concept source.");
+                sender.sendMessage("§8  Conceptual casts stay separate from your practical mode/source/aspect setup.");
                 sender.sendMessage("");
                 sender.sendMessage("§d§lUseful Notes:");
                 sender.sendMessage("§7  /graft clear resets source and aspect, keeps current mode.");
-                sender.sendMessage("§7  /graft inspect shows your full current setup including target slot.");
+                sender.sendMessage("§7  /graft inspect shows both your practical setup and any armed conceptual cast.");
             }
         }
         if (page < 3) {
@@ -285,6 +288,16 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
                 player.sendMessage("\u00a7dProperties: \u00a77" + props);
             }
         }
+        com.graftingplugin.gui.ConceptCatalogGui.PendingConceptAction pendingConcept = plugin.conceptCatalogGui().getPendingAction(player);
+        if (pendingConcept == null) {
+            player.sendMessage("\u00a7dConceptual Cast: \u00a77none armed \u00a78(/graft concept)");
+        } else if (!pendingConcept.type().requiresTwoAnchors()) {
+            player.sendMessage("\u00a7dConceptual Cast: \u00a75" + pendingConcept.type().displayName() + " \u00a78(zone law armed)");
+        } else if (pendingConcept.firstAnchor() == null) {
+            player.sendMessage("\u00a7dConceptual Cast: \u00a75" + pendingConcept.type().displayName() + " \u00a78(waiting for first anchor)");
+        } else {
+            player.sendMessage("\u00a7dConceptual Cast: \u00a75" + pendingConcept.type().displayName() + " \u00a78(waiting for second anchor)");
+        }
     }
 
     private void handleActive(CommandSender sender) {
@@ -300,13 +313,8 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
         }
 
         player.sendMessage("Active grafts:");
-        for (ActiveGraftSnapshot snapshot : activeGrafts) {
-            player.sendMessage("- [" + snapshot.family().displayName() + "] "
-                + snapshot.aspectName()
-                + ": " + snapshot.sourceName()
-                + " -> " + snapshot.targetName()
-                + " (" + snapshot.remainingSeconds() + "s)");
-        }
+        sendActiveSection(player, activeGrafts, false, "Practical", "§7");
+        sendActiveSection(player, activeGrafts, true, "Conceptual", "§5");
     }
 
     private void handleStatus(CommandSender sender, String[] args) {
@@ -344,8 +352,19 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
         List<ActiveGraftSnapshot> activeGrafts = plugin.activeGraftRegistry().activeFor(target.getUniqueId());
         sender.sendMessage("- Active graft count: " + activeGrafts.size());
         if (!activeGrafts.isEmpty()) {
-            for (ActiveGraftSnapshot snapshot : activeGrafts) {
-                sender.sendMessage("  * [" + snapshot.family().displayName() + "] " + snapshot.aspectName() + " -> " + snapshot.targetName() + " (" + snapshot.remainingSeconds() + "s)");
+            List<String> practical = describeActiveGrafts(activeGrafts, false);
+            List<String> conceptual = describeActiveGrafts(activeGrafts, true);
+            if (!practical.isEmpty()) {
+                sender.sendMessage("- Practical active:");
+                for (String line : practical) {
+                    sender.sendMessage("  * " + line);
+                }
+            }
+            if (!conceptual.isEmpty()) {
+                sender.sendMessage("- Conceptual active:");
+                for (String line : conceptual) {
+                    sender.sendMessage("  * " + line);
+                }
             }
         }
     }
@@ -484,6 +503,24 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
             builder.append(" [virtual]");
         }
         return builder.toString();
+    }
+
+    private void sendActiveSection(Player player, List<ActiveGraftSnapshot> activeGrafts, boolean conceptual, String title, String color) {
+        List<String> lines = describeActiveGrafts(activeGrafts, conceptual);
+        if (lines.isEmpty()) {
+            return;
+        }
+        player.sendMessage(color + title + ":");
+        for (String line : lines) {
+            player.sendMessage("- " + line);
+        }
+    }
+
+    private List<String> describeActiveGrafts(List<ActiveGraftSnapshot> activeGrafts, boolean conceptual) {
+        return activeGrafts.stream()
+            .filter(snapshot -> snapshot.conceptual() == conceptual)
+            .map(snapshot -> "[" + snapshot.familyLabel() + "] " + snapshot.aspectName() + " | " + snapshot.sourceName() + " -> " + snapshot.targetName() + " (" + snapshot.remainingSeconds() + "s)")
+            .toList();
     }
 
     private String formatProperties(GraftSubject source) {

@@ -2,6 +2,11 @@ package com.graftingplugin.conceptgraft;
 
 import com.graftingplugin.GraftingPlugin;
 import com.graftingplugin.cast.GraftFamily;
+import com.graftingplugin.conceptgraft.ConceptualRuntimeLedger.ActivationGate;
+import com.graftingplugin.conceptgraft.ConceptualRuntimeLedger.ConceptRuntimeKind;
+import com.graftingplugin.gui.ConceptCatalogGui;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
+import org.bukkit.FluidCollisionMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Particle;
@@ -9,10 +14,12 @@ import org.bukkit.Sound;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
+import org.bukkit.block.Container;
 import org.bukkit.block.data.Ageable;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.FallingBlock;
 import org.bukkit.entity.LivingEntity;
+import org.bukkit.entity.Mob;
 import org.bukkit.entity.Monster;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -20,7 +27,10 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityChangeBlockEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.EntityTargetLivingEntityEvent;
+import org.bukkit.event.inventory.InventoryOpenEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
+import org.bukkit.inventory.Inventory;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitTask;
@@ -34,14 +44,18 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class ConceptGraftService implements Listener {
 
     private final GraftingPlugin plugin;
+    private final ConceptualRuntimeLedger runtimeLedger = new ConceptualRuntimeLedger();
     private final Map<UUID, ActiveConceptZone> activeZones = new ConcurrentHashMap<>();
     private final Map<UUID, ActiveConceptLoop> activeLoops = new ConcurrentHashMap<>();
+    private final Map<UUID, ActiveThresholdRelay> activeThresholds = new ConcurrentHashMap<>();
     private final Set<BukkitTask> activeTasks = ConcurrentHashMap.newKeySet();
-    private final Map<UUID, Long> playerCooldowns = new ConcurrentHashMap<>();
-    private final Map<UUID, Long> loopTeleportCooldowns = new ConcurrentHashMap<>();
+    private final Map<UUID, Long> entityTeleportCooldowns = new ConcurrentHashMap<>();
+    private final Map<String, Long> feedbackCooldowns = new ConcurrentHashMap<>();
 
     public ConceptGraftService(GraftingPlugin plugin) {
         this.plugin = plugin;
+        BukkitTask previewTask = plugin.getServer().getScheduler().runTaskTimer(plugin, this::pulsePlacementPreviews, 1L, 8L);
+        activeTasks.add(previewTask);
     }
 
     public void shutdown() {
@@ -51,28 +65,28 @@ public final class ConceptGraftService implements Listener {
         for (UUID loopId : Set.copyOf(activeLoops.keySet())) {
             clearLoop(loopId);
         }
+        for (UUID relayId : Set.copyOf(activeThresholds.keySet())) {
+            clearThresholdRelay(relayId);
+        }
         for (BukkitTask task : Set.copyOf(activeTasks)) {
             task.cancel();
         }
         activeTasks.clear();
-        playerCooldowns.clear();
-        loopTeleportCooldowns.clear();
+        entityTeleportCooldowns.clear();
+        feedbackCooldowns.clear();
+        runtimeLedger.clearAll();
     }
 
     public boolean activateZone(Player caster, ConceptGraftType type, Location center) {
-        if (isOnCooldown(caster)) {
-            long remaining = cooldownRemainingSeconds(caster);
-            plugin.messages().send(caster, "conceptual-cooldown", Map.of("seconds", Long.toString(remaining)));
+        if (type.placementStyle() != ConceptPlacementStyle.ZONE) {
+            return false;
+        }
+        if (!canActivate(caster)) {
             return false;
         }
 
-        int activeCount = countActiveForPlayer(caster.getUniqueId());
+        long nowMillis = System.currentTimeMillis();
         ConceptGraftSettings settings = plugin.settings().conceptGraftSettings();
-        if (activeCount >= settings.maxActivePerPlayer()) {
-            plugin.messages().send(caster, "conceptual-max-active");
-            return false;
-        }
-
         UUID zoneId = UUID.randomUUID();
         Location zoneCenter = center.clone();
         int durationTicks = settings.zoneDurationTicks();
@@ -80,83 +94,37 @@ public final class ConceptGraftService implements Listener {
 
         BukkitTask pulseTask = plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
             ActiveConceptZone zone = activeZones.get(zoneId);
-            if (zone == null) {
-                return;
+            if (zone != null) {
+                pulseZone(zone);
             }
-            pulseZone(zone);
         }, 0L, settings.pulseIntervalTicks());
         activeTasks.add(pulseTask);
 
         BukkitTask cleanupTask = plugin.getServer().getScheduler().runTaskLater(plugin, () -> clearZone(zoneId), durationTicks);
         activeTasks.add(cleanupTask);
 
-        ActiveConceptZone zone = new ActiveConceptZone(zoneId, caster.getUniqueId(), type, zoneCenter, radius, pulseTask, cleanupTask);
+        BukkitTask warningTask = scheduleExpiryWarning(caster.getUniqueId(), type.displayName(), durationTicks);
+
+        ActiveConceptZone zone = new ActiveConceptZone(zoneId, caster.getUniqueId(), type, zoneCenter, radius, pulseTask, cleanupTask, warningTask);
         activeZones.put(zoneId, zone);
+        runtimeLedger.recordActivation(zoneId, caster.getUniqueId(), runtimeKindFor(type), type, describeLocation(zoneCenter), durationTicks, settings.cooldownTicks(), nowMillis);
+        registerConceptualActive(zoneId, caster.getUniqueId(), type, conceptualSourceName(type), describeLocation(zoneCenter), durationTicks, () -> clearZone(zoneId));
 
-        plugin.activeGraftRegistry().register(
-            zoneId, caster.getUniqueId(), GraftFamily.TOPOLOGY,
-            type.displayName(), type.key(), describeLocation(zoneCenter),
-            durationTicks, () -> clearZone(zoneId)
-        );
-
-        applyCooldown(caster);
         spawnActivationEffects(zoneCenter, type);
-
         plugin.messages().send(caster, "conceptual-zone-activated", Map.of(
             "graft", type.displayName(),
             "seconds", Integer.toString(durationTicks / 20)
         ));
+        sendActionBar(caster, "§5" + type.displayName() + " §8| §dlaw imposed over " + formatRadius(radius) + "m");
         return true;
     }
 
-    public boolean activateLoop(Player caster, Location anchorA, Location anchorB) {
-        if (isOnCooldown(caster)) {
-            long remaining = cooldownRemainingSeconds(caster);
-            plugin.messages().send(caster, "conceptual-cooldown", Map.of("seconds", Long.toString(remaining)));
-            return false;
-        }
-
-        int activeCount = countActiveForPlayer(caster.getUniqueId());
-        ConceptGraftSettings settings = plugin.settings().conceptGraftSettings();
-        if (activeCount >= settings.maxActivePerPlayer()) {
-            plugin.messages().send(caster, "conceptual-max-active");
-            return false;
-        }
-
-        UUID loopId = UUID.randomUUID();
-        int durationTicks = settings.loopDurationTicks();
-
-        BukkitTask pulseTask = plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
-            ActiveConceptLoop loop = activeLoops.get(loopId);
-            if (loop == null) {
-                return;
-            }
-            pulseLoop(loop);
-        }, 20L, 30L);
-        activeTasks.add(pulseTask);
-
-        BukkitTask cleanupTask = plugin.getServer().getScheduler().runTaskLater(plugin, () -> clearLoop(loopId), durationTicks);
-        activeTasks.add(cleanupTask);
-
-        ActiveConceptLoop loop = new ActiveConceptLoop(loopId, caster.getUniqueId(), anchorA.clone(), anchorB.clone(),
-            settings.loopActivationRadius(), pulseTask, cleanupTask);
-        activeLoops.put(loopId, loop);
-
-        plugin.activeGraftRegistry().register(
-            loopId, caster.getUniqueId(), GraftFamily.TOPOLOGY,
-            ConceptGraftType.BEGINNING_TO_END.displayName(), "beginning-to-end",
-            describeLocation(anchorA) + " \u2194 " + describeLocation(anchorB),
-            durationTicks, () -> clearLoop(loopId)
-        );
-
-        applyCooldown(caster);
-        spawnActivationEffects(anchorA, ConceptGraftType.BEGINNING_TO_END);
-        spawnActivationEffects(anchorB, ConceptGraftType.BEGINNING_TO_END);
-
-        plugin.messages().send(caster, "conceptual-loop-activated", Map.of(
-            "seconds", Integer.toString(durationTicks / 20)
-        ));
-        return true;
+    public boolean activateAnchoredGraft(Player caster, ConceptGraftType type, Location anchorA, Location anchorB) {
+        return switch (type) {
+            case BEGINNING_TO_END -> activateLoop(caster, type, anchorA, anchorB);
+            case THRESHOLD_TO_ELSEWHERE -> activateThresholdRelay(caster, type, anchorA, anchorB);
+            default -> false;
+        };
     }
 
     @EventHandler(ignoreCancelled = true)
@@ -167,18 +135,15 @@ public final class ConceptGraftService implements Listener {
         }
 
         for (ActiveConceptLoop loop : activeLoops.values()) {
-            long now = System.currentTimeMillis();
-            Long cooldownUntil = loopTeleportCooldowns.get(event.getPlayer().getUniqueId());
-            if (cooldownUntil != null && cooldownUntil > now) {
+            if (isOnTeleportCooldown(event.getPlayer().getUniqueId())) {
                 continue;
             }
-
             if (isNear(to, loop.anchorA(), loop.activationRadius())) {
-                teleportToLoop(event.getPlayer(), loop.anchorB(), loop);
+                teleportThroughLoop(event.getPlayer(), loop.anchorB(), loop, "Beginning yields to end here.");
                 break;
             }
             if (isNear(to, loop.anchorB(), loop.activationRadius())) {
-                teleportToLoop(event.getPlayer(), loop.anchorA(), loop);
+                teleportThroughLoop(event.getPlayer(), loop.anchorA(), loop, "End yields back to beginning here.");
                 break;
             }
         }
@@ -213,6 +178,7 @@ public final class ConceptGraftService implements Listener {
                 placed.getWorld().spawnParticle(Particle.SMOKE, loc.clone().add(0.5, 0.5, 0.5), 8, 0.3, 0.3, 0.3, 0.02);
                 placed.getWorld().playSound(loc, Sound.BLOCK_FIRE_EXTINGUISH, 0.5f, 1.5f);
                 plugin.messages().send(event.getPlayer(), "conceptual-nether-water-rejected");
+                sendActionBar(event.getPlayer(), "§cNether law rejects water here");
                 return;
             }
         }
@@ -233,29 +199,176 @@ public final class ConceptGraftService implements Listener {
         }
     }
 
+    @EventHandler(ignoreCancelled = true)
+    public void onEntityTarget(EntityTargetLivingEntityEvent event) {
+        if (!(event.getTarget() instanceof Player player) || !(event.getEntity() instanceof Mob mob)) {
+            return;
+        }
+        Location sourceLocation = mob.getLocation();
+        Location targetLocation = player.getLocation();
+        for (ActiveConceptZone zone : activeZones.values()) {
+            if (zone.type() != ConceptGraftType.CONCEALMENT_TO_RECOGNITION) {
+                continue;
+            }
+            if (!isInZone(sourceLocation, zone) || !isInZone(targetLocation, zone)) {
+                continue;
+            }
+            event.setCancelled(true);
+            mob.setTarget(null);
+            sendThrottledActionBar(player, "recognition", "§8Hostile recognition slips past you.", 1200L);
+            return;
+        }
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onInventoryOpen(InventoryOpenEvent event) {
+        Location openedLocation = event.getInventory().getLocation();
+        if (openedLocation == null || openedLocation.getWorld() == null || !(event.getPlayer() instanceof Player player)) {
+            return;
+        }
+
+        for (ActiveThresholdRelay relay : activeThresholds.values()) {
+            if (!sameBlock(openedLocation, relay.sourceAnchor())) {
+                continue;
+            }
+            Inventory targetInventory = resolveContainerInventory(relay.destinationAnchor());
+            if (targetInventory == null) {
+                clearThresholdRelay(relay.id());
+                return;
+            }
+            event.setCancelled(true);
+            plugin.getServer().getScheduler().runTask(plugin, () -> player.openInventory(targetInventory));
+            player.playSound(player.getLocation(), Sound.BLOCK_ENDER_CHEST_OPEN, 0.7f, 1.1f);
+            sendThrottledActionBar(player, "threshold", "§5The threshold opens elsewhere.", 800L);
+            return;
+        }
+    }
+
+    private boolean activateLoop(Player caster, ConceptGraftType type, Location anchorA, Location anchorB) {
+        if (!canActivate(caster)) {
+            return false;
+        }
+
+        long nowMillis = System.currentTimeMillis();
+        ConceptGraftSettings settings = plugin.settings().conceptGraftSettings();
+        UUID loopId = UUID.randomUUID();
+        int durationTicks = settings.loopDurationTicks();
+
+        BukkitTask pulseTask = plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
+            ActiveConceptLoop loop = activeLoops.get(loopId);
+            if (loop != null) {
+                pulseLoop(loop);
+            }
+        }, 1L, 10L);
+        activeTasks.add(pulseTask);
+
+        BukkitTask cleanupTask = plugin.getServer().getScheduler().runTaskLater(plugin, () -> clearLoop(loopId), durationTicks);
+        activeTasks.add(cleanupTask);
+
+        BukkitTask warningTask = scheduleExpiryWarning(caster.getUniqueId(), type.displayName(), durationTicks);
+
+        ActiveConceptLoop loop = new ActiveConceptLoop(loopId, caster.getUniqueId(), type, anchorA.clone(), anchorB.clone(), settings.loopActivationRadius(), pulseTask, cleanupTask, warningTask);
+        activeLoops.put(loopId, loop);
+        runtimeLedger.recordActivation(loopId, caster.getUniqueId(), runtimeKindFor(type), type, describeAnchoredTarget(anchorA, anchorB), durationTicks, settings.cooldownTicks(), nowMillis);
+        registerConceptualActive(loopId, caster.getUniqueId(), type, conceptualSourceName(type), describeAnchoredTarget(anchorA, anchorB), durationTicks, () -> clearLoop(loopId));
+
+        spawnActivationEffects(anchorA, type);
+        spawnActivationEffects(anchorB, type);
+        plugin.messages().send(caster, "conceptual-loop-activated", Map.of(
+            "seconds", Integer.toString(durationTicks / 20)
+        ));
+        sendActionBar(caster, "§5Beginning and end identified as one path");
+        return true;
+    }
+
+    private boolean activateThresholdRelay(Player caster, ConceptGraftType type, Location sourceAnchor, Location destinationAnchor) {
+        Block sourceBlock = sourceAnchor.getBlock();
+        Block destinationBlock = destinationAnchor.getBlock();
+        if (!(sourceBlock.getState() instanceof Container) || !(destinationBlock.getState() instanceof Container)) {
+            caster.sendMessage("§cThreshold → Elsewhere requires two container anchors.");
+            return false;
+        }
+        if (sameBlock(sourceAnchor, destinationAnchor)) {
+            caster.sendMessage("§cChoose two different container anchors.");
+            return false;
+        }
+        if (!canActivate(caster)) {
+            return false;
+        }
+
+        long nowMillis = System.currentTimeMillis();
+        ConceptGraftSettings settings = plugin.settings().conceptGraftSettings();
+        UUID relayId = UUID.randomUUID();
+        int durationTicks = settings.loopDurationTicks();
+
+        BukkitTask pulseTask = plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
+            ActiveThresholdRelay relay = activeThresholds.get(relayId);
+            if (relay != null) {
+                pulseThresholdRelay(relay);
+            }
+        }, 1L, 10L);
+        activeTasks.add(pulseTask);
+
+        BukkitTask cleanupTask = plugin.getServer().getScheduler().runTaskLater(plugin, () -> clearThresholdRelay(relayId), durationTicks);
+        activeTasks.add(cleanupTask);
+
+        BukkitTask warningTask = scheduleExpiryWarning(caster.getUniqueId(), type.displayName(), durationTicks);
+
+        ActiveThresholdRelay relay = new ActiveThresholdRelay(relayId, caster.getUniqueId(), type,
+            sourceBlock.getLocation().toBlockLocation(), destinationBlock.getLocation().toBlockLocation(), pulseTask, cleanupTask, warningTask);
+        activeThresholds.put(relayId, relay);
+        runtimeLedger.recordActivation(relayId, caster.getUniqueId(), runtimeKindFor(type), type, describeAnchoredTarget(sourceAnchor, destinationAnchor), durationTicks, settings.cooldownTicks(), nowMillis);
+        registerConceptualActive(relayId, caster.getUniqueId(), type, conceptualSourceName(type), describeAnchoredTarget(sourceAnchor, destinationAnchor), durationTicks, () -> clearThresholdRelay(relayId));
+
+        spawnActivationEffects(sourceBlock.getLocation().add(0.5D, 0.5D, 0.5D), type);
+        spawnActivationEffects(destinationBlock.getLocation().add(0.5D, 0.5D, 0.5D), type);
+        plugin.messages().send(caster, "conceptual-threshold-activated", Map.of(
+            "seconds", Integer.toString(durationTicks / 20)
+        ));
+        sendActionBar(caster, "§5This threshold now opens elsewhere");
+        return true;
+    }
+
+    private boolean canActivate(Player caster) {
+        ConceptGraftSettings settings = plugin.settings().conceptGraftSettings();
+        ActivationGate gate = runtimeLedger.checkActivation(caster.getUniqueId(), System.currentTimeMillis(), settings);
+        if (gate.allowed()) {
+            return true;
+        }
+        if (gate.cooldownBlocked()) {
+            plugin.messages().send(caster, "conceptual-cooldown", Map.of("seconds", Long.toString(gate.remainingSeconds())));
+            return false;
+        }
+        plugin.messages().send(caster, "conceptual-max-active");
+        return false;
+    }
+
     private void pulseZone(ActiveConceptZone zone) {
         if (zone.center().getWorld() == null) {
             clearZone(zone.id());
             return;
         }
+        renderZoneBoundary(zone.center().getWorld(), zone.center(), zone.radius(), previewParticleFor(zone.type()), 10);
         switch (zone.type()) {
             case SUN_TO_GROUND -> pulseSunZone(zone);
             case SKY_TO_GROUND -> pulseSkyZone(zone);
             case NETHER_ZONE -> pulseNetherZone(zone);
             case END_ZONE -> pulseEndZone(zone);
             case OVERWORLD_ZONE -> pulseOverworldZone(zone);
-            default -> {}
+            case CONCEALMENT_TO_RECOGNITION -> pulseConcealmentZone(zone);
+            default -> {
+            }
         }
     }
 
     private void pulseSunZone(ActiveConceptZone zone) {
         World world = zone.center().getWorld();
-        double r = zone.radius();
+        double radius = zone.radius();
 
-        world.spawnParticle(Particle.END_ROD, zone.center().clone().add(0, 3, 0), 8, r * 0.3, 1.5, r * 0.3, 0.01);
-        world.spawnParticle(Particle.FLAME, zone.center(), 4, r * 0.2, 0.5, r * 0.2, 0.005);
+        world.spawnParticle(Particle.END_ROD, zone.center().clone().add(0, 3, 0), 8, radius * 0.3, 1.5, radius * 0.3, 0.01);
+        world.spawnParticle(Particle.FLAME, zone.center(), 4, radius * 0.2, 0.5, radius * 0.2, 0.005);
 
-        for (LivingEntity entity : world.getNearbyLivingEntities(zone.center(), r)) {
+        for (LivingEntity entity : world.getNearbyLivingEntities(zone.center(), radius)) {
             if (entity instanceof Player player) {
                 player.setPlayerTime(6000L, false);
             }
@@ -264,19 +377,19 @@ public final class ConceptGraftService implements Listener {
             }
         }
 
-        int ir = (int) r;
-        for (int dx = -ir; dx <= ir; dx++) {
-            for (int dz = -ir; dz <= ir; dz++) {
-                if (dx * dx + dz * dz > r * r) {
+        int limit = (int) radius;
+        for (int dx = -limit; dx <= limit; dx++) {
+            for (int dz = -limit; dz <= limit; dz++) {
+                if (dx * dx + dz * dz > radius * radius) {
                     continue;
                 }
                 Location probe = zone.center().clone().add(dx, 0, dz);
                 for (int dy = -2; dy <= 2; dy++) {
                     Block block = probe.clone().add(0, dy, 0).getBlock();
-                    Material mat = block.getType();
-                    if (mat == Material.ICE) {
+                    Material material = block.getType();
+                    if (material == Material.ICE) {
                         block.setType(Material.WATER);
-                    } else if (mat == Material.SNOW || mat == Material.SNOW_BLOCK) {
+                    } else if (material == Material.SNOW || material == Material.SNOW_BLOCK) {
                         block.setType(Material.AIR);
                     } else if (block.getBlockData() instanceof Ageable ageable) {
                         if (ageable.getAge() < ageable.getMaximumAge()
@@ -292,12 +405,17 @@ public final class ConceptGraftService implements Listener {
 
     private void pulseSkyZone(ActiveConceptZone zone) {
         World world = zone.center().getWorld();
-        double r = zone.radius();
+        double radius = zone.radius();
 
-        world.spawnParticle(Particle.CLOUD, zone.center().clone().add(0, 2, 0), 6, r * 0.3, 1.0, r * 0.3, 0.01);
-        world.spawnParticle(Particle.END_ROD, zone.center().clone().add(0, 1, 0), 4, r * 0.2, 2.0, r * 0.2, 0.02);
+        world.spawnParticle(Particle.CLOUD, zone.center().clone().add(0, 2, 0), 6, radius * 0.3, 1.0, radius * 0.3, 0.01);
+        world.spawnParticle(Particle.END_ROD, zone.center().clone().add(0, 1, 0), 4, radius * 0.2, 2.0, radius * 0.2, 0.02);
 
-        for (LivingEntity entity : world.getNearbyLivingEntities(zone.center(), r)) {
+        for (FallingBlock fallingBlock : world.getNearbyEntitiesByType(FallingBlock.class, zone.center(), radius)) {
+            fallingBlock.remove();
+            world.spawnParticle(Particle.CLOUD, fallingBlock.getLocation(), 8, 0.2, 0.2, 0.2, 0.02);
+        }
+
+        for (LivingEntity entity : world.getNearbyLivingEntities(zone.center(), radius)) {
             entity.addPotionEffect(new PotionEffect(PotionEffectType.LEVITATION, 30, 0, true, false, true));
             entity.addPotionEffect(new PotionEffect(PotionEffectType.SLOW_FALLING, 60, 0, true, false, true));
             entity.setFallDistance(0.0F);
@@ -305,42 +423,31 @@ public final class ConceptGraftService implements Listener {
                 player.setPlayerWeather(org.bukkit.WeatherType.CLEAR);
             }
         }
-
-        for (Entity entity : world.getNearbyEntities(zone.center(), r, r, r)) {
-            if (entity instanceof FallingBlock fallingBlock && isInZone(fallingBlock.getLocation(), zone)) {
-                Location fLoc = fallingBlock.getLocation();
-                world.spawnParticle(Particle.CLOUD, fLoc, 4, 0.2, 0.2, 0.2, 0.01);
-                fallingBlock.remove();
-            }
-        }
     }
 
     private void pulseNetherZone(ActiveConceptZone zone) {
         World world = zone.center().getWorld();
-        double r = zone.radius();
+        double radius = zone.radius();
 
-        world.spawnParticle(Particle.SOUL_FIRE_FLAME, zone.center(), 6, r * 0.3, 0.5, r * 0.3, 0.01);
-        world.spawnParticle(Particle.LAVA, zone.center(), 3, r * 0.2, 0.3, r * 0.2, 0.0);
-        world.spawnParticle(Particle.ASH, zone.center(), 10, r * 0.4, 1.0, r * 0.4, 0.0);
+        world.spawnParticle(Particle.SOUL_FIRE_FLAME, zone.center(), 6, radius * 0.3, 0.5, radius * 0.3, 0.01);
+        world.spawnParticle(Particle.LAVA, zone.center(), 3, radius * 0.2, 0.3, radius * 0.2, 0.0);
+        world.spawnParticle(Particle.ASH, zone.center(), 10, radius * 0.4, 1.0, radius * 0.4, 0.0);
 
-        for (LivingEntity entity : world.getNearbyLivingEntities(zone.center(), r)) {
+        for (LivingEntity entity : world.getNearbyLivingEntities(zone.center(), radius)) {
             entity.addPotionEffect(new PotionEffect(PotionEffectType.FIRE_RESISTANCE, 40, 0, true, false, true));
         }
 
-        int ir = (int) r;
-        for (int dx = -ir; dx <= ir; dx++) {
-            for (int dz = -ir; dz <= ir; dz++) {
-                if (dx * dx + dz * dz > r * r) {
+        int limit = (int) radius;
+        for (int dx = -limit; dx <= limit; dx++) {
+            for (int dz = -limit; dz <= limit; dz++) {
+                if (dx * dx + dz * dz > radius * radius) {
                     continue;
                 }
                 Location probe = zone.center().clone().add(dx, 0, dz);
                 for (int dy = -2; dy <= 2; dy++) {
                     Block block = probe.clone().add(0, dy, 0).getBlock();
-                    Material mat = block.getType();
-                    if (mat == Material.WATER) {
-                        block.setType(Material.AIR);
-                        world.spawnParticle(Particle.SMOKE, block.getLocation().add(0.5, 0.5, 0.5), 5, 0.2, 0.2, 0.2, 0.02);
-                    } else if (mat == Material.ICE || mat == Material.BLUE_ICE || mat == Material.PACKED_ICE) {
+                    Material material = block.getType();
+                    if (material == Material.WATER || material == Material.ICE || material == Material.BLUE_ICE || material == Material.PACKED_ICE) {
                         block.setType(Material.AIR);
                         world.spawnParticle(Particle.SMOKE, block.getLocation().add(0.5, 0.5, 0.5), 5, 0.2, 0.2, 0.2, 0.02);
                     }
@@ -351,22 +458,22 @@ public final class ConceptGraftService implements Listener {
 
     private void pulseEndZone(ActiveConceptZone zone) {
         World world = zone.center().getWorld();
-        double r = zone.radius();
+        double radius = zone.radius();
 
-        world.spawnParticle(Particle.DRAGON_BREATH, zone.center(), 6, r * 0.3, 0.5, r * 0.3, 0.005);
-        world.spawnParticle(Particle.PORTAL, zone.center(), 12, r * 0.3, 1.0, r * 0.3, 0.3);
-        world.spawnParticle(Particle.REVERSE_PORTAL, zone.center().clone().add(0, 1, 0), 6, r * 0.2, 0.5, r * 0.2, 0.1);
+        world.spawnParticle(Particle.DRAGON_BREATH, zone.center(), 6, radius * 0.3, 0.5, radius * 0.3, 0.005);
+        world.spawnParticle(Particle.PORTAL, zone.center(), 12, radius * 0.3, 1.0, radius * 0.3, 0.3);
+        world.spawnParticle(Particle.REVERSE_PORTAL, zone.center().clone().add(0, 1, 0), 6, radius * 0.2, 0.5, radius * 0.2, 0.1);
 
-        for (LivingEntity entity : world.getNearbyLivingEntities(zone.center(), r)) {
-            if (Math.random() > 0.08) {
+        for (LivingEntity entity : world.getNearbyLivingEntities(zone.center(), radius)) {
+            if (Math.random() > 0.08D) {
                 continue;
             }
-            double offsetX = (Math.random() - 0.5) * r * 0.6;
-            double offsetZ = (Math.random() - 0.5) * r * 0.6;
+            double offsetX = (Math.random() - 0.5D) * radius * 0.6D;
+            double offsetZ = (Math.random() - 0.5D) * radius * 0.6D;
             Location destination = entity.getLocation().clone().add(offsetX, 0, offsetZ);
-            Block destBlock = destination.getBlock();
-            Block below = destBlock.getRelative(BlockFace.DOWN);
-            if (destBlock.getType().isAir() && !below.getType().isAir()) {
+            Block destinationBlock = destination.getBlock();
+            Block below = destinationBlock.getRelative(BlockFace.DOWN);
+            if (destinationBlock.getType().isAir() && !below.getType().isAir()) {
                 world.spawnParticle(Particle.REVERSE_PORTAL, entity.getLocation(), 12, 0.3, 0.5, 0.3, 0.1);
                 entity.teleport(destination);
                 world.spawnParticle(Particle.REVERSE_PORTAL, destination, 12, 0.3, 0.5, 0.3, 0.1);
@@ -377,11 +484,11 @@ public final class ConceptGraftService implements Listener {
 
     private void pulseOverworldZone(ActiveConceptZone zone) {
         World world = zone.center().getWorld();
-        double r = zone.radius();
+        double radius = zone.radius();
 
-        world.spawnParticle(Particle.HAPPY_VILLAGER, zone.center(), 5, r * 0.3, 0.5, r * 0.3, 0.01);
+        world.spawnParticle(Particle.HAPPY_VILLAGER, zone.center(), 5, radius * 0.3, 0.5, radius * 0.3, 0.01);
 
-        for (LivingEntity entity : world.getNearbyLivingEntities(zone.center(), r)) {
+        for (LivingEntity entity : world.getNearbyLivingEntities(zone.center(), radius)) {
             entity.removePotionEffect(PotionEffectType.LEVITATION);
             entity.removePotionEffect(PotionEffectType.SLOW_FALLING);
             entity.removePotionEffect(PotionEffectType.FIRE_RESISTANCE);
@@ -395,6 +502,23 @@ public final class ConceptGraftService implements Listener {
         }
     }
 
+    private void pulseConcealmentZone(ActiveConceptZone zone) {
+        World world = zone.center().getWorld();
+        double radius = zone.radius();
+
+        world.spawnParticle(Particle.SMOKE, zone.center(), 6, radius * 0.25, 0.8, radius * 0.25, 0.01);
+        world.spawnParticle(Particle.WITCH, zone.center().clone().add(0, 1, 0), 4, radius * 0.2, 0.5, radius * 0.2, 0.0);
+
+        for (Mob mob : world.getNearbyEntitiesByType(Mob.class, zone.center(), radius)) {
+            if (!(mob.getTarget() instanceof Player player)) {
+                continue;
+            }
+            if (isInZone(player.getLocation(), zone)) {
+                mob.setTarget(null);
+            }
+        }
+    }
+
     private void pulseLoop(ActiveConceptLoop loop) {
         if (loop.anchorA().getWorld() == null || loop.anchorB().getWorld() == null) {
             clearLoop(loop.id());
@@ -402,27 +526,204 @@ public final class ConceptGraftService implements Listener {
         }
         World worldA = loop.anchorA().getWorld();
         World worldB = loop.anchorB().getWorld();
-        worldA.spawnParticle(Particle.PORTAL, loop.anchorA(), 8, 0.3, 0.5, 0.3, 0.3);
-        worldA.spawnParticle(Particle.END_ROD, loop.anchorA(), 3, 0.2, 0.3, 0.2, 0.01);
-        worldB.spawnParticle(Particle.PORTAL, loop.anchorB(), 8, 0.3, 0.5, 0.3, 0.3);
-        worldB.spawnParticle(Particle.END_ROD, loop.anchorB(), 3, 0.2, 0.3, 0.2, 0.01);
+        worldA.spawnParticle(Particle.PORTAL, loop.anchorA(), 10, 0.35, 0.5, 0.35, 0.35);
+        worldA.spawnParticle(Particle.END_ROD, loop.anchorA(), 4, 0.2, 0.35, 0.2, 0.01);
+        worldB.spawnParticle(Particle.PORTAL, loop.anchorB(), 10, 0.35, 0.5, 0.35, 0.35);
+        worldB.spawnParticle(Particle.END_ROD, loop.anchorB(), 4, 0.2, 0.35, 0.2, 0.01);
+        renderLink(loop.anchorA(), loop.anchorB(), Particle.REVERSE_PORTAL, 12);
+        transferLoopEntities(loop, loop.anchorA(), loop.anchorB(), "Beginning resolves as end.");
+        transferLoopEntities(loop, loop.anchorB(), loop.anchorA(), "End resolves as beginning.");
     }
 
-    private void teleportToLoop(Player player, Location destination, ActiveConceptLoop loop) {
-        Location dest = destination.clone();
-        dest.setYaw(player.getLocation().getYaw());
-        dest.setPitch(player.getLocation().getPitch());
-        Vector velocity = player.getVelocity().clone();
-        player.teleport(dest);
-        player.setFallDistance(0.0F);
-        player.setVelocity(velocity);
+    private void transferLoopEntities(ActiveConceptLoop loop, Location source, Location destination, String feedback) {
+        World world = source.getWorld();
+        if (world == null) {
+            return;
+        }
+        for (Entity entity : world.getNearbyEntities(source, loop.activationRadius(), 1.75D, loop.activationRadius())) {
+            if (!entity.isValid() || isOnTeleportCooldown(entity.getUniqueId())) {
+                continue;
+            }
+            teleportThroughLoop(entity, destination, loop, feedback);
+        }
+    }
 
-        ConceptGraftSettings settings = plugin.settings().conceptGraftSettings();
-        loopTeleportCooldowns.put(player.getUniqueId(), System.currentTimeMillis() + settings.loopCooldownTicks() * 50L);
+    private void pulseThresholdRelay(ActiveThresholdRelay relay) {
+        if (relay.sourceAnchor().getWorld() == null || relay.destinationAnchor().getWorld() == null) {
+            clearThresholdRelay(relay.id());
+            return;
+        }
+        if (!(relay.sourceAnchor().getBlock().getState() instanceof Container) || !(relay.destinationAnchor().getBlock().getState() instanceof Container)) {
+            clearThresholdRelay(relay.id());
+            return;
+        }
+        Location source = relay.sourceAnchor().clone().add(0.5D, 0.5D, 0.5D);
+        Location destination = relay.destinationAnchor().clone().add(0.5D, 0.5D, 0.5D);
+        source.getWorld().spawnParticle(Particle.REVERSE_PORTAL, source, 8, 0.25D, 0.25D, 0.25D, 0.2D);
+        source.getWorld().spawnParticle(Particle.END_ROD, source, 3, 0.15D, 0.25D, 0.15D, 0.01D);
+        destination.getWorld().spawnParticle(Particle.REVERSE_PORTAL, destination, 8, 0.25D, 0.25D, 0.25D, 0.2D);
+        destination.getWorld().spawnParticle(Particle.END_ROD, destination, 3, 0.15D, 0.25D, 0.15D, 0.01D);
+        renderLink(source, destination, Particle.PORTAL, 10);
+    }
 
-        dest.getWorld().spawnParticle(Particle.REVERSE_PORTAL, dest, 20, 0.3, 0.5, 0.3, 0.1);
-        dest.getWorld().spawnParticle(Particle.END_ROD, dest, 8, 0.2, 0.3, 0.2, 0.01);
-        dest.getWorld().playSound(dest, Sound.ENTITY_ENDERMAN_TELEPORT, 0.6f, 0.8f);
+    private void teleportThroughLoop(Entity entity, Location destination, ActiveConceptLoop loop, String feedback) {
+        Location target = destination.clone();
+        Vector velocity = entity.getVelocity().clone();
+        if (entity instanceof Player player) {
+            target.setYaw(player.getLocation().getYaw());
+            target.setPitch(player.getLocation().getPitch());
+        }
+        entity.teleport(target);
+        entity.setFallDistance(0.0F);
+        entity.setVelocity(velocity);
+
+        int cooldownTicks = plugin.settings().conceptGraftSettings().loopCooldownTicks();
+        entityTeleportCooldowns.put(entity.getUniqueId(), System.currentTimeMillis() + cooldownTicks * 50L);
+
+        World world = target.getWorld();
+        if (world != null) {
+            world.spawnParticle(Particle.REVERSE_PORTAL, target, 16, 0.25D, 0.4D, 0.25D, 0.08D);
+            world.spawnParticle(Particle.END_ROD, target, 6, 0.15D, 0.25D, 0.15D, 0.01D);
+            world.playSound(target, Sound.ENTITY_ENDERMAN_TELEPORT, 0.6f, 0.8f);
+        }
+        if (entity instanceof Player player) {
+            sendThrottledActionBar(player, "loop", "§5" + feedback, 600L);
+        }
+    }
+
+    private void pulsePlacementPreviews() {
+        for (Player player : plugin.getServer().getOnlinePlayers()) {
+            ConceptCatalogGui.PendingConceptAction pending = plugin.conceptCatalogGui().getPendingAction(player);
+            if (pending == null) {
+                continue;
+            }
+            previewPendingAction(player, pending);
+        }
+    }
+
+    private void previewPendingAction(Player player, ConceptCatalogGui.PendingConceptAction pending) {
+        if (!plugin.focusItemService().isFocus(player.getInventory().getItemInMainHand())) {
+            return;
+        }
+        if (pending.type().placementStyle() == ConceptPlacementStyle.ZONE) {
+            Location previewCenter = resolvePreviewLocation(player, false);
+            previewZone(player, pending.type(), previewCenter, plugin.settings().conceptGraftSettings().zoneRadius());
+            sendActionBar(player, "§5" + pending.type().displayName() + " §8| §dpreview " + formatRadius(plugin.settings().conceptGraftSettings().zoneRadius()) + "m law zone");
+            return;
+        }
+
+        if (pending.type().firstAnchorComesFromCaster()) {
+            Location secondAnchor = resolvePreviewLocation(player, false);
+            previewAnchors(player, pending.type(), pending.firstAnchor(), secondAnchor);
+            sendActionBar(player, "§5" + pending.type().displayName() + " §8| §dchoose the second anchor");
+            return;
+        }
+
+        Location previewAnchor = resolvePreviewLocation(player, true);
+        if (pending.firstAnchor() == null) {
+            previewSingleAnchor(player, pending.type(), previewAnchor, previewAnchor.getBlock().getState() instanceof Container);
+            sendActionBar(player, "§5" + pending.type().displayName() + " §8| §dchoose a source container");
+            return;
+        }
+        previewAnchors(player, pending.type(), pending.firstAnchor(), previewAnchor);
+        sendActionBar(player, "§5" + pending.type().displayName() + " §8| §dchoose the destination container");
+    }
+
+    private void previewZone(Player player, ConceptGraftType type, Location center, double radius) {
+        player.spawnParticle(previewParticleFor(type), center, 8, 0.2D, 0.4D, 0.2D, 0.01D);
+        spawnRing(player, center, radius, previewParticleFor(type), 14);
+    }
+
+    private void previewSingleAnchor(Player player, ConceptGraftType type, Location center, boolean valid) {
+        Particle particle = valid ? previewParticleFor(type) : Particle.SMOKE;
+        player.spawnParticle(particle, center, 10, 0.2D, 0.3D, 0.2D, 0.01D);
+        spawnRing(player, center, 0.8D, particle, 10);
+    }
+
+    private void previewAnchors(Player player, ConceptGraftType type, Location first, Location second) {
+        if (first != null) {
+            player.spawnParticle(previewParticleFor(type), first, 10, 0.2D, 0.3D, 0.2D, 0.01D);
+            spawnRing(player, first, 0.8D, previewParticleFor(type), 10);
+        }
+        player.spawnParticle(previewParticleFor(type), second, 10, 0.2D, 0.3D, 0.2D, 0.01D);
+        spawnRing(player, second, 0.8D, previewParticleFor(type), 10);
+        spawnLink(player, first, second, previewParticleFor(type), 12);
+    }
+
+    private Location resolvePreviewLocation(Player player, boolean blockAnchor) {
+        Block targetBlock = player.getTargetBlockExact(plugin.settings().interactionRange(), FluidCollisionMode.ALWAYS);
+        if (targetBlock != null) {
+            return blockAnchor
+                ? targetBlock.getLocation().add(0.5D, 0.5D, 0.5D)
+                : targetBlock.getLocation().add(0.5D, 1.0D, 0.5D);
+        }
+        return player.getLocation().clone();
+    }
+
+    private void registerConceptualActive(UUID trackingId, UUID ownerId, ConceptGraftType type, String sourceName, String targetName, int durationTicks, Runnable cleanupAction) {
+        plugin.activeGraftRegistry().register(
+            trackingId,
+            ownerId,
+            GraftFamily.TOPOLOGY,
+            activeLabelFor(type),
+            true,
+            type.displayName(),
+            sourceName,
+            targetName,
+            durationTicks,
+            cleanupAction
+        );
+    }
+
+    private String activeLabelFor(ConceptGraftType type) {
+        return switch (type) {
+            case BEGINNING_TO_END -> "Conceptual Identity";
+            case THRESHOLD_TO_ELSEWHERE, CONCEALMENT_TO_RECOGNITION -> "Conceptual Rewrite";
+            default -> "Conceptual Law";
+        };
+    }
+
+    private String conceptualSourceName(ConceptGraftType type) {
+        return switch (type) {
+            case SUN_TO_GROUND -> "solar law";
+            case SKY_TO_GROUND -> "sky law";
+            case NETHER_ZONE -> "nether law";
+            case END_ZONE -> "end law";
+            case OVERWORLD_ZONE -> "overworld law";
+            case CONCEALMENT_TO_RECOGNITION -> "recognition rewrite";
+            case BEGINNING_TO_END -> "shared place-identity";
+            case THRESHOLD_TO_ELSEWHERE -> "threshold rewrite";
+        };
+    }
+
+    private ConceptRuntimeKind runtimeKindFor(ConceptGraftType type) {
+        return switch (type) {
+            case BEGINNING_TO_END -> ConceptRuntimeKind.IDENTITY_LOOP;
+            case THRESHOLD_TO_ELSEWHERE -> ConceptRuntimeKind.RELATION_RELAY;
+            case CONCEALMENT_TO_RECOGNITION -> ConceptRuntimeKind.RELATION_ZONE;
+            default -> ConceptRuntimeKind.LAW_ZONE;
+        };
+    }
+
+    private BukkitTask scheduleExpiryWarning(UUID ownerId, String graftName, int durationTicks) {
+        int warningTicks = Math.min(200, Math.max(40, durationTicks / 4));
+        if (durationTicks <= warningTicks) {
+            return null;
+        }
+        BukkitTask warningTask = plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+            Player owner = plugin.getServer().getPlayer(ownerId);
+            if (owner == null || !owner.isOnline()) {
+                return;
+            }
+            int remainingSeconds = warningTicks / 20;
+            plugin.messages().send(owner, "conceptual-expiring", Map.of(
+                "graft", graftName,
+                "seconds", Integer.toString(remainingSeconds)
+            ));
+            sendActionBar(owner, "§5" + graftName + " §8| §d" + remainingSeconds + "s remaining");
+        }, durationTicks - warningTicks);
+        activeTasks.add(warningTask);
+        return warningTask;
     }
 
     private void clearZone(UUID zoneId) {
@@ -430,11 +731,11 @@ public final class ConceptGraftService implements Listener {
         if (zone == null) {
             return;
         }
-        zone.pulseTask().cancel();
-        activeTasks.remove(zone.pulseTask());
-        zone.cleanupTask().cancel();
-        activeTasks.remove(zone.cleanupTask());
+        cancelTrackedTask(zone.pulseTask());
+        cancelTrackedTask(zone.cleanupTask());
+        cancelTrackedTask(zone.warningTask());
         plugin.activeGraftRegistry().unregister(zoneId);
+        runtimeLedger.release(zoneId);
 
         if (zone.type() == ConceptGraftType.SUN_TO_GROUND || zone.type() == ConceptGraftType.SKY_TO_GROUND) {
             if (zone.center().getWorld() != null) {
@@ -446,7 +747,7 @@ public final class ConceptGraftService implements Listener {
         }
 
         if (zone.center().getWorld() != null) {
-            zone.center().getWorld().spawnParticle(Particle.SMOKE, zone.center(), 20, zone.radius() * 0.2, 0.5, zone.radius() * 0.2, 0.02);
+            zone.center().getWorld().spawnParticle(Particle.SMOKE, zone.center(), 18, zone.radius() * 0.2, 0.5, zone.radius() * 0.2, 0.02);
             zone.center().getWorld().playSound(zone.center(), Sound.BLOCK_BEACON_DEACTIVATE, 0.6f, 1.2f);
         }
     }
@@ -456,11 +757,11 @@ public final class ConceptGraftService implements Listener {
         if (loop == null) {
             return;
         }
-        loop.pulseTask().cancel();
-        activeTasks.remove(loop.pulseTask());
-        loop.cleanupTask().cancel();
-        activeTasks.remove(loop.cleanupTask());
+        cancelTrackedTask(loop.pulseTask());
+        cancelTrackedTask(loop.cleanupTask());
+        cancelTrackedTask(loop.warningTask());
         plugin.activeGraftRegistry().unregister(loopId);
+        runtimeLedger.release(loopId);
 
         if (loop.anchorA().getWorld() != null) {
             loop.anchorA().getWorld().spawnParticle(Particle.SMOKE, loop.anchorA(), 10, 0.3, 0.5, 0.3, 0.02);
@@ -470,62 +771,68 @@ public final class ConceptGraftService implements Listener {
         }
     }
 
-    private boolean isOnCooldown(Player player) {
-        Long cooldownUntil = playerCooldowns.get(player.getUniqueId());
+    private void clearThresholdRelay(UUID relayId) {
+        ActiveThresholdRelay relay = activeThresholds.remove(relayId);
+        if (relay == null) {
+            return;
+        }
+        cancelTrackedTask(relay.pulseTask());
+        cancelTrackedTask(relay.cleanupTask());
+        cancelTrackedTask(relay.warningTask());
+        plugin.activeGraftRegistry().unregister(relayId);
+        runtimeLedger.release(relayId);
+
+        if (relay.sourceAnchor().getWorld() != null) {
+            relay.sourceAnchor().getWorld().spawnParticle(Particle.SMOKE, relay.sourceAnchor().clone().add(0.5D, 0.5D, 0.5D), 10, 0.2D, 0.2D, 0.2D, 0.02D);
+        }
+        if (relay.destinationAnchor().getWorld() != null) {
+            relay.destinationAnchor().getWorld().spawnParticle(Particle.SMOKE, relay.destinationAnchor().clone().add(0.5D, 0.5D, 0.5D), 10, 0.2D, 0.2D, 0.2D, 0.02D);
+        }
+    }
+
+    private void cancelTrackedTask(BukkitTask task) {
+        if (task == null) {
+            return;
+        }
+        task.cancel();
+        activeTasks.remove(task);
+    }
+
+    private Inventory resolveContainerInventory(Location location) {
+        if (location == null || location.getWorld() == null || !(location.getBlock().getState() instanceof Container container)) {
+            return null;
+        }
+        return container.getInventory();
+    }
+
+    private boolean isInZone(Location location, ActiveConceptZone zone) {
+        if (location.getWorld() == null || !location.getWorld().equals(zone.center().getWorld())) {
+            return false;
+        }
+        return location.distanceSquared(zone.center()) <= zone.radius() * zone.radius();
+    }
+
+    private boolean isNear(Location location, Location anchor, double radius) {
+        if (location.getWorld() == null || !location.getWorld().equals(anchor.getWorld())) {
+            return false;
+        }
+        return location.distanceSquared(anchor) <= radius * radius;
+    }
+
+    private boolean isOnTeleportCooldown(UUID entityId) {
+        Long cooldownUntil = entityTeleportCooldowns.get(entityId);
         return cooldownUntil != null && cooldownUntil > System.currentTimeMillis();
-    }
-
-    private long cooldownRemainingSeconds(Player player) {
-        Long cooldownUntil = playerCooldowns.get(player.getUniqueId());
-        if (cooldownUntil == null) {
-            return 0;
-        }
-        return Math.max(1L, (long) Math.ceil((cooldownUntil - System.currentTimeMillis()) / 1000.0));
-    }
-
-    private void applyCooldown(Player player) {
-        ConceptGraftSettings settings = plugin.settings().conceptGraftSettings();
-        playerCooldowns.put(player.getUniqueId(), System.currentTimeMillis() + settings.cooldownTicks() * 50L);
-    }
-
-    private int countActiveForPlayer(UUID playerId) {
-        int count = 0;
-        for (ActiveConceptZone zone : activeZones.values()) {
-            if (zone.ownerId().equals(playerId)) {
-                count++;
-            }
-        }
-        for (ActiveConceptLoop loop : activeLoops.values()) {
-            if (loop.ownerId().equals(playerId)) {
-                count++;
-            }
-        }
-        return count;
-    }
-
-    private boolean isInZone(Location loc, ActiveConceptZone zone) {
-        if (loc.getWorld() == null || !loc.getWorld().equals(zone.center().getWorld())) {
-            return false;
-        }
-        return loc.distanceSquared(zone.center()) <= zone.radius() * zone.radius();
-    }
-
-    private boolean isNear(Location loc, Location anchor, double radius) {
-        if (loc.getWorld() == null || !loc.getWorld().equals(anchor.getWorld())) {
-            return false;
-        }
-        return loc.distanceSquared(anchor) <= radius * radius;
     }
 
     private boolean isUndead(LivingEntity entity) {
         return entity instanceof Monster && (
-            entity.getType().name().contains("ZOMBIE") ||
-            entity.getType().name().contains("SKELETON") ||
-            entity.getType().name().contains("PHANTOM") ||
-            entity.getType().name().contains("DROWNED") ||
-            entity.getType().name().contains("WITHER") ||
-            entity.getType().name().contains("STRAY") ||
-            entity.getType().name().contains("HUSK")
+            entity.getType().name().contains("ZOMBIE")
+                || entity.getType().name().contains("SKELETON")
+                || entity.getType().name().contains("PHANTOM")
+                || entity.getType().name().contains("DROWNED")
+                || entity.getType().name().contains("WITHER")
+                || entity.getType().name().contains("STRAY")
+                || entity.getType().name().contains("HUSK")
         );
     }
 
@@ -563,6 +870,11 @@ public final class ConceptGraftService implements Listener {
                 world.spawnParticle(Particle.HAPPY_VILLAGER, center, 40, 2.0, 1.5, 2.0, 0.02);
                 world.playSound(center, Sound.BLOCK_BEACON_ACTIVATE, 0.8f, 1.2f);
             }
+            case CONCEALMENT_TO_RECOGNITION -> {
+                world.spawnParticle(Particle.SMOKE, center, 35, 2.0, 1.2, 2.0, 0.01);
+                world.spawnParticle(Particle.WITCH, center.clone().add(0, 1.2D, 0), 20, 1.5D, 0.6D, 1.5D, 0.0D);
+                world.playSound(center, Sound.ENTITY_ILLUSIONER_PREPARE_BLINDNESS, 0.7f, 1.2f);
+            }
             case BEGINNING_TO_END -> {
                 world.spawnParticle(Particle.PORTAL, center, 50, 1.0, 1.5, 1.0, 0.5);
                 world.spawnParticle(Particle.REVERSE_PORTAL, center, 30, 0.5, 1.0, 0.5, 0.3);
@@ -570,12 +882,118 @@ public final class ConceptGraftService implements Listener {
                 world.playSound(center, Sound.ENTITY_ENDERMAN_TELEPORT, 0.8f, 0.6f);
                 world.playSound(center, Sound.BLOCK_BEACON_ACTIVATE, 0.6f, 1.0f);
             }
+            case THRESHOLD_TO_ELSEWHERE -> {
+                world.spawnParticle(Particle.PORTAL, center, 36, 0.6D, 0.6D, 0.6D, 0.2D);
+                world.spawnParticle(Particle.END_ROD, center, 12, 0.25D, 0.4D, 0.25D, 0.01D);
+                world.playSound(center, Sound.BLOCK_ENDER_CHEST_OPEN, 0.7f, 1.0f);
+                world.playSound(center, Sound.BLOCK_BEACON_ACTIVATE, 0.6f, 1.2f);
+            }
         }
     }
 
-    private String describeLocation(Location loc) {
-        String world = loc.getWorld() == null ? "world" : loc.getWorld().getName();
-        return world + " @ " + loc.getBlockX() + ", " + loc.getBlockY() + ", " + loc.getBlockZ();
+    private Particle previewParticleFor(ConceptGraftType type) {
+        return switch (type) {
+            case SUN_TO_GROUND -> Particle.END_ROD;
+            case SKY_TO_GROUND -> Particle.CLOUD;
+            case NETHER_ZONE -> Particle.SOUL_FIRE_FLAME;
+            case END_ZONE -> Particle.REVERSE_PORTAL;
+            case OVERWORLD_ZONE -> Particle.HAPPY_VILLAGER;
+            case CONCEALMENT_TO_RECOGNITION -> Particle.WITCH;
+            case BEGINNING_TO_END -> Particle.PORTAL;
+            case THRESHOLD_TO_ELSEWHERE -> Particle.REVERSE_PORTAL;
+        };
+    }
+
+    private void renderZoneBoundary(World world, Location center, double radius, Particle particle, int points) {
+        spawnRing(world, center, radius, particle, points);
+    }
+
+    private void renderLink(Location start, Location end, Particle particle, int points) {
+        if (start == null || end == null || start.getWorld() == null || !start.getWorld().equals(end.getWorld())) {
+            return;
+        }
+        spawnLink(start.getWorld(), start, end, particle, points);
+    }
+
+    private void spawnRing(Player player, Location center, double radius, Particle particle, int points) {
+        if (center.getWorld() == null) {
+            return;
+        }
+        for (int index = 0; index < points; index++) {
+            double angle = (Math.PI * 2.0D * index) / points;
+            Location point = center.clone().add(Math.cos(angle) * radius, 0.1D, Math.sin(angle) * radius);
+            player.spawnParticle(particle, point, 1, 0.0D, 0.0D, 0.0D, 0.0D);
+        }
+    }
+
+    private void spawnRing(World world, Location center, double radius, Particle particle, int points) {
+        if (world == null) {
+            return;
+        }
+        for (int index = 0; index < points; index++) {
+            double angle = (Math.PI * 2.0D * index) / points;
+            Location point = center.clone().add(Math.cos(angle) * radius, 0.1D, Math.sin(angle) * radius);
+            world.spawnParticle(particle, point, 1, 0.0D, 0.0D, 0.0D, 0.0D);
+        }
+    }
+
+    private void spawnLink(Player player, Location start, Location end, Particle particle, int points) {
+        if (start == null || end == null || start.getWorld() == null || !start.getWorld().equals(end.getWorld())) {
+            return;
+        }
+        Vector delta = end.toVector().subtract(start.toVector());
+        for (int index = 1; index < points; index++) {
+            Location point = start.clone().add(delta.clone().multiply(index / (double) points));
+            player.spawnParticle(particle, point, 1, 0.0D, 0.0D, 0.0D, 0.0D);
+        }
+    }
+
+    private void spawnLink(World world, Location start, Location end, Particle particle, int points) {
+        if (world == null || start == null || end == null) {
+            return;
+        }
+        Vector delta = end.toVector().subtract(start.toVector());
+        for (int index = 1; index < points; index++) {
+            Location point = start.clone().add(delta.clone().multiply(index / (double) points));
+            world.spawnParticle(particle, point, 1, 0.0D, 0.0D, 0.0D, 0.0D);
+        }
+    }
+
+    private void sendThrottledActionBar(Player player, String key, String message, long cooldownMillis) {
+        String fullKey = player.getUniqueId() + ":" + key;
+        long now = System.currentTimeMillis();
+        Long nextAllowed = feedbackCooldowns.get(fullKey);
+        if (nextAllowed != null && nextAllowed > now) {
+            return;
+        }
+        feedbackCooldowns.put(fullKey, now + cooldownMillis);
+        sendActionBar(player, message);
+    }
+
+    private void sendActionBar(Player player, String text) {
+        player.sendActionBar(LegacyComponentSerializer.legacySection().deserialize(text));
+    }
+
+    private boolean sameBlock(Location first, Location second) {
+        if (first.getWorld() == null || !first.getWorld().equals(second.getWorld())) {
+            return false;
+        }
+        return first.getBlockX() == second.getBlockX()
+            && first.getBlockY() == second.getBlockY()
+            && first.getBlockZ() == second.getBlockZ();
+    }
+
+    private String describeLocation(Location location) {
+        String world = location.getWorld() == null ? "world" : location.getWorld().getName();
+        return world + " @ " + location.getBlockX() + ", " + location.getBlockY() + ", " + location.getBlockZ();
+    }
+
+    private String describeAnchoredTarget(Location anchorA, Location anchorB) {
+        return describeLocation(anchorA) + " ↔ " + describeLocation(anchorB);
+    }
+
+    private String formatRadius(double radius) {
+        return String.format(java.util.Locale.ROOT, "%.1f", radius);
     }
 
     private record ActiveConceptZone(
@@ -585,16 +1003,33 @@ public final class ConceptGraftService implements Listener {
         Location center,
         double radius,
         BukkitTask pulseTask,
-        BukkitTask cleanupTask
-    ) {}
+        BukkitTask cleanupTask,
+        BukkitTask warningTask
+    ) {
+    }
 
     private record ActiveConceptLoop(
         UUID id,
         UUID ownerId,
+        ConceptGraftType type,
         Location anchorA,
         Location anchorB,
         double activationRadius,
         BukkitTask pulseTask,
-        BukkitTask cleanupTask
-    ) {}
+        BukkitTask cleanupTask,
+        BukkitTask warningTask
+    ) {
+    }
+
+    private record ActiveThresholdRelay(
+        UUID id,
+        UUID ownerId,
+        ConceptGraftType type,
+        Location sourceAnchor,
+        Location destinationAnchor,
+        BukkitTask pulseTask,
+        BukkitTask cleanupTask,
+        BukkitTask warningTask
+    ) {
+    }
 }

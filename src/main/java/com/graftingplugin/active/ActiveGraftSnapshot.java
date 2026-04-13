@@ -7,6 +7,8 @@ import java.util.UUID;
 public record ActiveGraftSnapshot(
     UUID trackingId,
     GraftFamily family,
+    String familyLabel,
+    boolean conceptual,
     String aspectName,
     String sourceName,
     String targetName,
