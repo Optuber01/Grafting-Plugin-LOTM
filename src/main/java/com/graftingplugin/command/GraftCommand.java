@@ -95,7 +95,7 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
                 sender.sendMessage("§7  Item repair: §fMode state, Heal aspect, Left-Click offhand item OR /graft target.");
                 sender.sendMessage("§7  Inv slot -> Chest: §e/graft inventory §f-> pick item, mode link, Left-Click chest.");
                 sender.sendMessage("§7  Chest -> Chest: §fMode link, Right-Click source chest, Left-Click target chest.");
-                sender.sendMessage("§7  Slot -> Slot: §e/graft inventory §f+ §e/graft target §f-> picks both slots, then Left-Click.");
+                sender.sendMessage("§7  Slot -> Slot (your inventory): §e/graft inventory §f+ §e/graft target §f-> picks both slots, then Left-Click.");
                 sender.sendMessage("");
                 sender.sendMessage("§d§lItem Targeting:");
                 sender.sendMessage("§7  Offhand: §fHold any item in offhand. It is auto-targeted when you cast in air.");
@@ -200,7 +200,7 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
         }
         plugin.inventoryTargetPickerGui().open(player);
         player.sendMessage("\u00a77Pick an inventory slot to use as the \u00a7bTarget\u00a77.");
-        player.sendMessage("\u00a78State + Heal: repairs the item in that slot. Link + /graft inventory: swaps items between slots.");
+        player.sendMessage("\u00a78State + Heal: repairs the item in that slot. Link + /graft inventory: swaps two of your own inventory slots.");
     }
 
     private void handleAspect(CommandSender sender, String[] args) {

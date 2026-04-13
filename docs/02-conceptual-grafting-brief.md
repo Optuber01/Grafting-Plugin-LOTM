@@ -1,124 +1,55 @@
-# Agent Brief: Conceptual Grafting
+# Remaining Grafting Work Roadmap
 
-## Reference
-- LOTM ability reference: https://lordofthemysteries.fandom.com/wiki/Fool_Pathway/Abilities#Sequence_1:_Attendant_of_Mysteries
+## Baseline
+Use the current `pi/conceptual-grafting` branch as the baseline.
 
-## Context
-This phase is about the part the current plugin missed: **conceptual grafting**.
+Already done:
+- Phase 1 cleanup and simplification
+- Phase 2 practical graft and UX improvements
+- initial conceptual graft menu and 6 conceptual grafts
 
-In this project, conceptual grafting should not mean:
-- a concept card that only maps to a small preset list of aspects
-- a themed buff source
-- a cosmetic extra panel
+Do not redo earlier phases.
+Build on the current baseline only.
 
-It should mean:
-- **temporarily making one thing inherit the law, identity, rule, or behavior of something else**
+## Priority order
+Work on the remaining gaps in this order:
 
-## Core definition
-Use this definition:
+### Tier 1 — Highest impact
+1. `docs/03-conceptual-law-identity-transfer.md`
+2. `docs/04-conceptual-relationship-rewrite.md`
+3. `docs/05-practical-graft-breadth.md`
 
-> Conceptual grafting transfers a **law, rule, identity, or environmental behavior** from a concept onto a target.
+### Tier 2 — Strong improvements
+4. `docs/06-conceptual-practical-separation.md`
+5. `docs/07-conceptual-telegraphing-and-feedback.md`
+6. `docs/08-conceptual-runtime-verification.md`
 
-Concrete grafting transfers properties.
-Conceptual grafting transfers laws.
+### Tier 3 — Nice to have
+7. `docs/09-optional-conceptual-grafts.md`
+8. `docs/10-repo-presentation-polish.md`
+9. `docs/11-nice-to-haves-backlog.md`
 
-## Goal
-Build the smallest robust foundation for **concept-based rule grafting**.
+## Main strategic goal
+The biggest remaining problem is that conceptual grafting still reads more like curated zone effects than true LOTM-style law / identity / rule transfer.
 
-This phase should make the concept panel matter.
-The player should be able to pick a concept and apply it in a way that feels like reality is being rewritten, not just like a themed status effect.
+The next work should move the plugin toward:
+- stronger conceptual semantics
+- stronger relationship rewriting
+- broader but still controlled practical identity grafting
+- clearer telegraphing and player understanding
 
-## Design direction
-Prioritize:
-- temporary
-- localized
-- reversible
-- understandable
-- extensible
-
-Do **not** try to rewrite the entire server or dimension globally.
-Favor **anchored rule patches** over permanent world edits.
-
-## What conceptual grafting should look like
-Examples of intended behavior:
-- **Sun -> Ground**
-  - the ground temporarily behaves under sun-like rules
-- **Overworld -> Nether zone**
-  - a local area in the Nether temporarily behaves under Overworld-like rules
-- **Nether -> Overworld zone**
-  - a local area in the Overworld temporarily behaves under Nether-like rules
-- **Beginning -> End**
-  - the end of a path or loop behaves like its beginning
-- **Sky -> Ground**
-  - the ground temporarily inherits sky-like behavior
-
-The result should feel like **rule substitution**, not just effect transfer.
-
-## Scope guidance
-Support a small number of strong concepts first.
-Recommended early concepts:
-- Sun
-- Overworld
-- Nether
-- End
-- Beginning
-- End
-- Distance
-- Binding
-- Sky
-- Ground
-
-Support only a small number of target classes at first, for example:
-- block
-- zone/area
-- path/link
-- entity
-- container/inventory
-
-## Strong design principles
-- Concepts should have **clear target-dependent behavior**.
-- A concept should not just be a static bag of aspects.
-- Prefer a few strong, legible conceptual grafts over many weak ones.
-- Keep player-facing language simple.
-- Keep LOTM flavor, but do not rely on obscure terminology.
-
-## Constraints
-- Keep it a **Paper plugin**.
-- Keep **Java 21**.
-- No NMS.
-- No ProtocolLib.
-- No database.
-- No persistence layer.
-- Runtime state stays **in memory only**.
-- Keep it lean.
-- Build a foundation, not an endless combination engine.
-
-## Non-goals
-- Do not implement infinite freeform reality editing.
-- Do not add full dimension rewriting.
-- Do not add unrelated systems or lore mechanics.
-- Do not solve this with huge hardcoded pair tables for every possible combination.
-- Do not turn the concept panel into a cosmetic picker with no real gameplay weight.
-
-## Workflow requirements
-- Use a **proper git worktree**.
+## Guardrails
+- Use a proper git worktree.
 - Do not work directly in the main checkout.
-- Keep the directory clean.
-- Do not leave temp files, logs, or build junk.
-- **Do not add code comments.**
-- Keep the implementation focused and reviewable.
+- Do not add code comments.
+- Keep the repo clean.
+- Keep changes narrow and sequential.
+- Do not re-bloat the plugin.
+- Do not mix routine practical grafts into the same interaction tier as rare conceptual grafts.
 
-## Acceptance criteria
-- Conceptual grafting is represented as **law/rule/identity transfer**, not just themed effects.
-- At least a few core examples are implemented cleanly.
-- The concept panel has real gameplay value.
-- The implementation stays localized and reversible.
-- The system is understandable for players.
-- The codebase remains lean.
-- Relevant tests pass.
-- No code comments are introduced.
-- The worktree is clean at handoff.
-
-## Phase order
-This phase comes **after** the mod-improvements phase.
-Do not expand conceptual grafting on top of a messy or bloated baseline.
+## Acceptance standard
+Each follow-up phase should:
+- stay on the current baseline
+- solve one specific gap clearly
+- keep build/test green
+- keep the worktree clean at handoff

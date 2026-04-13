@@ -34,7 +34,7 @@ The plugin jar is written to `build/libs/`.
 1. Build the jar.
 2. Copy `build/libs/GraftingPlugin-0.1.0-SNAPSHOT.jar` into your Paper server `plugins/` folder.
 3. Start the server once to generate `config.yml` and `messages.yml`.
-4. Use `/graft givefocus` to get the focus item.
+4. Use `/graft givefocus` if you have admin permission, or have an admin give you the focus item.
 
 ## Focus item
 
@@ -96,7 +96,7 @@ Settings are in `config.yml` under `conceptual-graft`.
 ## Aspect selection
 
 - `/graft aspect <aspect>` sets an aspect directly.
-- `/graft next` or Shift-right-click cycles compatible aspects.
+- `/graft next` or `/graft cycle`, or Shift-right-click, cycles compatible aspects.
 - `/graft inspect` shows the current mode, source, aspect, and available aspects.
 
 ## Casting
@@ -163,10 +163,10 @@ Current behavior is intentionally narrow:
 | `/graft concept` | Open the conceptual graft menu. | `grafting.use` |
 | `/graft concept list` | Open the practical concept catalog. | `grafting.use` |
 | `/graft concept <name>` | Select a practical concept source directly. | `grafting.use` |
-| `/graft inventory` | Open the inventory source picker. | `grafting.use` |
+| `/graft inventory` / `/graft inv` | Open the inventory source picker. | `grafting.use` |
 | `/graft target` | Open the inventory target slot picker. | `grafting.use` |
 | `/graft aspect <aspect>` | Select an aspect directly. | `grafting.use` |
-| `/graft next` | Cycle to the next compatible aspect. | `grafting.use` |
+| `/graft next` / `/graft cycle` | Cycle to the next compatible aspect. | `grafting.use` |
 | `/graft inspect` | Show the current graft setup. | `grafting.use` |
 | `/graft clear` | Clear the current source and aspect. | `grafting.use` |
 | `/graft active` | Show active runtime grafts for yourself. | `grafting.use` |
