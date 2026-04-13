@@ -2,13 +2,13 @@ name: GraftingPlugin
 version: ${version}
 main: com.graftingplugin.GraftingPlugin
 api-version: '1.21'
-description: Lean grafting mechanics for Paper.
+description: Grafting Plugin based on LOTM for paper servers.
 authors:
   - Optuber
 commands:
   graft:
     description: Core grafting command.
-    usage: /graft <help|mode|concept [list|<name>]|inventory|inv|target|aspect|next|cycle|self|inspect|clear|active|debug|status|clearactive|givefocus|reload>
+    usage: /graft <help | mode | concept [list|<name>] | inventory | inv | target | aspect | next | cycle | self | inspect | clear | active | debug | status | clearactive | givefocus | reload>
     permission: grafting.use
 permissions:
   grafting.use:
