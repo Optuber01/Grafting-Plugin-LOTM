@@ -56,12 +56,7 @@ public enum GraftFamily {
     }
 
     private static boolean matches(GraftFamily family, String normalized) {
-        return switch (family) {
-            case STATE -> normalized.equals("state") || normalized.equals("stategraft") || normalized.equals("attributes");
-            case RELATION -> normalized.equals("link") || normalized.equals("linkgraft") || normalized.equals("relation") || normalized.equals("connection");
-            case TOPOLOGY -> normalized.equals("location") || normalized.equals("locationgraft") || normalized.equals("topology") || normalized.equals("spatial");
-            case SEQUENCE -> normalized.equals("event") || normalized.equals("eventgraft") || normalized.equals("sequence") || normalized.equals("trigger");
-        };
+        return normalized.equals(family.key());
     }
 
     private static String normalize(String input) {

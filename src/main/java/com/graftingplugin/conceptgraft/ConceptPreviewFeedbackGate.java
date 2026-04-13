@@ -7,17 +7,15 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class ConceptPreviewFeedbackGate {
 
     private final Map<UUID, PreviewFeedbackState> states = new ConcurrentHashMap<>();
-    public ConceptPreviewFeedbackGate(long resendWindowMillis) {
-    }
 
-    public boolean shouldSend(UUID playerId, String previewKey, String message, long nowMillis) {
+    public boolean shouldSend(UUID playerId, String previewKey, String message) {
         PreviewFeedbackState previous = states.get(playerId);
         if (previous != null
             && previous.previewKey().equals(previewKey)
             && previous.message().equals(message)) {
             return false;
         }
-        states.put(playerId, new PreviewFeedbackState(previewKey, message, nowMillis));
+        states.put(playerId, new PreviewFeedbackState(previewKey, message));
         return true;
     }
 
@@ -29,6 +27,6 @@ public final class ConceptPreviewFeedbackGate {
         states.clear();
     }
 
-    private record PreviewFeedbackState(String previewKey, String message, long sentAtMillis) {
+    private record PreviewFeedbackState(String previewKey, String message) {
     }
 }

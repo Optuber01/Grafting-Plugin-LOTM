@@ -202,6 +202,7 @@ public final class TopologyGraftService implements Listener {
         UUID routeId = UUID.randomUUID();
         BukkitTask cleanupTask = plugin.getServer().getScheduler().runTaskLater(plugin, () -> clearRoute(routeId), durationTicks);
         activeTasks.add(cleanupTask);
+        BukkitTask pulseTask = startAnchorPulse(routeId, sourceAnchor.anchor(), target.anchor(), settings);
 
         ActiveTopologyRoute route = new ActiveTopologyRoute(
             routeId,
@@ -214,6 +215,7 @@ public final class TopologyGraftService implements Listener {
             target.blockAnchor(),
             activationRadius,
             settings.activationCooldownTicks(),
+            pulseTask,
             cleanupTask,
             sourceAnchor.displayName(),
             target.subject().displayName()
@@ -243,9 +245,6 @@ public final class TopologyGraftService implements Listener {
 
         sourceAnchor.anchor().getWorld().playSound(sourceAnchor.anchor(), Sound.ENTITY_ENDERMAN_TELEPORT, 0.7f, 1.2f);
         target.anchor().getWorld().playSound(target.anchor(), Sound.ENTITY_ENDERMAN_TELEPORT, 0.7f, 0.8f);
-
-
-        startAnchorPulse(routeId, sourceAnchor.anchor(), target.anchor(), settings);
 
         String messageKey = plan.mode() == TopologyGraftMode.ANCHOR_LINK ? "topology-cast-link" : "topology-cast-loop";
         plugin.messages().send(caster, messageKey, Map.of(
@@ -355,7 +354,7 @@ public final class TopologyGraftService implements Listener {
         return blockLocation.clone().add(0.5D, 1.0D, 0.5D);
     }
 
-    private void startAnchorPulse(UUID routeId, Location source, Location target, TopologyGraftSettings settings) {
+    private BukkitTask startAnchorPulse(UUID routeId, Location source, Location target, TopologyGraftSettings settings) {
         BukkitTask pulseTask = plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
             ActiveTopologyRoute route = activeRoutes.get(routeId);
             if (route == null || !isRouteValid(route)) {
@@ -376,6 +375,7 @@ public final class TopologyGraftService implements Listener {
             }
         }, 20L, 30L);
         activeTasks.add(pulseTask);
+        return pulseTask;
     }
 
     private void clearRoute(UUID routeId) {
@@ -384,8 +384,16 @@ public final class TopologyGraftService implements Listener {
             return;
         }
         plugin.activeGraftRegistry().unregister(routeId);
-        route.cleanupTask().cancel();
-        activeTasks.remove(route.cleanupTask());
+        cancelTrackedTask(route.pulseTask());
+        cancelTrackedTask(route.cleanupTask());
+    }
+
+    private void cancelTrackedTask(BukkitTask task) {
+        if (task == null) {
+            return;
+        }
+        task.cancel();
+        activeTasks.remove(task);
     }
 
     private record AnchorReference(String displayName, Location anchor, Location destination, Location blockAnchor) {
@@ -405,6 +413,7 @@ public final class TopologyGraftService implements Listener {
         Location targetBlockAnchor,
         double activationRadius,
         int activationCooldownTicks,
+        BukkitTask pulseTask,
         BukkitTask cleanupTask,
         String sourceName,
         String targetName

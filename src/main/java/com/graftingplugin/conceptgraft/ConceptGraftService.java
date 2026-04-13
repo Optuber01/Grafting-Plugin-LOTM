@@ -54,14 +54,13 @@ public final class ConceptGraftService implements Listener {
     private final Map<UUID, Long> entityTeleportCooldowns = new ConcurrentHashMap<>();
     private final Map<String, Long> feedbackCooldowns = new ConcurrentHashMap<>();
     private final Map<UUID, Set<UUID>> playerZonePresence = new ConcurrentHashMap<>();
-    private final ConceptPreviewFeedbackGate previewFeedbackGate = new ConceptPreviewFeedbackGate(1500L);
+    private final ConceptPreviewFeedbackGate previewFeedbackGate = new ConceptPreviewFeedbackGate();
+    private BukkitTask previewTask;
+    private BukkitTask presenceTask;
 
     public ConceptGraftService(GraftingPlugin plugin) {
         this.plugin = plugin;
-        BukkitTask previewTask = plugin.getServer().getScheduler().runTaskTimer(plugin, this::pulsePlacementPreviews, 1L, 8L);
-        activeTasks.add(previewTask);
-        BukkitTask presenceTask = plugin.getServer().getScheduler().runTaskTimer(plugin, this::pulseZonePresenceFeedback, 5L, 10L);
-        activeTasks.add(presenceTask);
+        restartBackgroundTasks();
     }
 
     public void shutdown() {
@@ -74,6 +73,7 @@ public final class ConceptGraftService implements Listener {
         for (UUID relayId : Set.copyOf(activeThresholds.keySet())) {
             clearThresholdRelay(relayId);
         }
+        stopBackgroundTasks();
         for (BukkitTask task : Set.copyOf(activeTasks)) {
             task.cancel();
         }
@@ -83,6 +83,23 @@ public final class ConceptGraftService implements Listener {
         playerZonePresence.clear();
         previewFeedbackGate.clearAll();
         runtimeLedger.clearAll();
+    }
+
+    public void restartBackgroundTasks() {
+        stopBackgroundTasks();
+        previewFeedbackGate.clearAll();
+        playerZonePresence.clear();
+        previewTask = plugin.getServer().getScheduler().runTaskTimer(plugin, this::pulsePlacementPreviews, 1L, 8L);
+        activeTasks.add(previewTask);
+        presenceTask = plugin.getServer().getScheduler().runTaskTimer(plugin, this::pulseZonePresenceFeedback, 5L, 10L);
+        activeTasks.add(presenceTask);
+    }
+
+    private void stopBackgroundTasks() {
+        cancelTrackedTask(previewTask);
+        cancelTrackedTask(presenceTask);
+        previewTask = null;
+        presenceTask = null;
     }
 
     public boolean activateZone(Player caster, ConceptGraftType type, Location center) {
@@ -1097,8 +1114,7 @@ public final class ConceptGraftService implements Listener {
     }
 
     private void sendPreviewActionBar(Player player, String previewKey, String message) {
-        long now = System.currentTimeMillis();
-        if (!previewFeedbackGate.shouldSend(player.getUniqueId(), previewKey, message, now)) {
+        if (!previewFeedbackGate.shouldSend(player.getUniqueId(), previewKey, message)) {
             return;
         }
         sendActionBar(player, message);

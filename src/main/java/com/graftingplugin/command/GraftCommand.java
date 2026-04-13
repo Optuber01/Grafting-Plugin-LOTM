@@ -36,12 +36,20 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if (!hasUseAccess(sender)) {
+            sender.sendMessage("You do not have permission to use this command.");
+            return true;
+        }
         if (args.length == 0) {
             sendUsage(sender);
             return true;
         }
 
         String subcommand = args[0].toLowerCase(Locale.ROOT);
+        if (isAdminSubcommand(subcommand) && !sender.hasPermission("grafting.admin")) {
+            sender.sendMessage("You do not have permission to use this command.");
+            return true;
+        }
         switch (subcommand) {
             case "help" -> handleHelp(sender, args);
             case "mode" -> handleMode(sender, args);
@@ -166,7 +174,7 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
             plugin.conceptCatalogGui().openConceptualGraftMenu(player);
             return;
         }
-        if (args[1].equalsIgnoreCase("list") || args[1].equalsIgnoreCase("catalog")) {
+        if (args[1].equalsIgnoreCase("list")) {
             plugin.conceptCatalogGui().open(player);
             player.sendMessage("\u00a77Pick a concept source or use \u00a7e/graft concept <name>\u00a77 directly.");
             return;
@@ -451,6 +459,7 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
         sender.sendMessage("/graft help|mode|concept|inventory|inv|target|aspect|next|cycle|self|inspect|clear|active|debug");
         sender.sendMessage("/graft status|clearactive|givefocus|reload");
         sender.sendMessage("\u00a77Modes: \u00a7estate \u00a77| \u00a7elink \u00a77| \u00a7elocation \u00a77| \u00a7eevent");
+        sender.sendMessage("\u00a77Concepts: \u00a7e/graft concept\u00a77 for conceptual grafts, \u00a7e/graft concept list\u00a77 for practical concept sources.");
     }
 
     private Player requirePlayer(CommandSender sender) {
@@ -463,8 +472,15 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
 
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
+        if (!hasUseAccess(sender)) {
+            return List.of();
+        }
         if (args.length == 1) {
-            return filter(List.of("help", "mode", "concept", "inventory", "inv", "target", "aspect", "next", "cycle", "self", "inspect", "clear", "active", "debug", "status", "clearactive", "givefocus", "reload"), args[0]);
+            List<String> commands = new ArrayList<>(List.of("help", "mode", "concept", "inventory", "inv", "target", "aspect", "next", "cycle", "self", "inspect", "clear", "active", "debug"));
+            if (sender.hasPermission("grafting.admin")) {
+                commands.addAll(List.of("status", "clearactive", "givefocus", "reload"));
+            }
+            return filter(commands, args[0]);
         }
         if (args.length == 2 && args[0].equalsIgnoreCase("mode")) {
             return filter(List.of("state", "link", "location", "event"), args[1]);
@@ -485,12 +501,29 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
                 .toList(), args[1]);
         }
         if (args.length == 2 && args[0].equalsIgnoreCase("givefocus")) {
+            if (!sender.hasPermission("grafting.admin")) {
+                return List.of();
+            }
             return filter(Bukkit.getOnlinePlayers().stream().map(Player::getName).toList(), args[1]);
         }
         if (args.length == 2 && (args[0].equalsIgnoreCase("status") || args[0].equalsIgnoreCase("clearactive"))) {
+            if (!sender.hasPermission("grafting.admin")) {
+                return List.of();
+            }
             return filter(Bukkit.getOnlinePlayers().stream().map(Player::getName).toList(), args[1]);
         }
         return List.of();
+    }
+
+    private boolean hasUseAccess(CommandSender sender) {
+        return sender.hasPermission("grafting.use") || sender.hasPermission("grafting.admin");
+    }
+
+    private boolean isAdminSubcommand(String subcommand) {
+        return switch (subcommand) {
+            case "status", "clearactive", "givefocus", "reload" -> true;
+            default -> false;
+        };
     }
 
     private Component helpNav(int page) {

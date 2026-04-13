@@ -165,6 +165,8 @@ public final class GraftingPlugin extends JavaPlugin {
         }
         if (this.conceptGraftService == null) {
             this.conceptGraftService = new ConceptGraftService(this);
+        } else {
+            this.conceptGraftService.restartBackgroundTasks();
         }
         if (this.conceptCatalogGui == null) {
             this.conceptCatalogGui = new ConceptCatalogGui(this);

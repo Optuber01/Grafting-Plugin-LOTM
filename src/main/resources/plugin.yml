@@ -8,9 +8,12 @@ authors:
 commands:
   graft:
     description: Core grafting command.
-    usage: /graft <help|mode|concept|inventory|inv|target|aspect|next|cycle|self|inspect|clear|active|debug|status|clearactive|givefocus|reload>
+    usage: /graft <help|mode|concept [list|<name>]|inventory|inv|target|aspect|next|cycle|self|inspect|clear|active|debug|status|clearactive|givefocus|reload>
+    permission: grafting.use
 permissions:
   grafting.use:
     default: true
   grafting.admin:
     default: op
+    children:
+      grafting.use: true

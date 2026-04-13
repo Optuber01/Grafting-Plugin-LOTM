@@ -23,7 +23,7 @@ public record PluginSettings(
         }
         String focusName = config.getString("focus.name", "<light_purple>Mystic Focus</light_purple>");
         int interactionRange = Math.max(1, config.getInt("focus.interaction-range", 8));
-        boolean focusDebugEnabledByDefault = config.getBoolean("focus.debug-enabled-by-default", true);
+        boolean focusDebugEnabledByDefault = config.getBoolean("focus.debug-enabled-by-default", false);
         return new PluginSettings(
             focusMaterial,
             focusName,

@@ -232,7 +232,7 @@ public final class StateTransferService implements Listener {
         if (!applyBlockPlan(caster, source, target.displayName(), block, plan)) {
             return false;
         }
-        clearCastSelection(caster);
+        sendSetupStillArmedMessage(caster);
         return true;
     }
 
@@ -250,7 +250,7 @@ public final class StateTransferService implements Listener {
         if (!applyBlockPlan(caster, source, target.displayName(), fluidBlock, plan)) {
             return false;
         }
-        clearCastSelection(caster);
+        sendSetupStillArmedMessage(caster);
         return true;
     }
 
@@ -267,7 +267,7 @@ public final class StateTransferService implements Listener {
         }
 
         startField(caster, source, plan, center, target.displayName());
-        clearCastSelection(caster);
+        sendSetupStillArmedMessage(caster);
         return true;
     }
 
@@ -323,7 +323,7 @@ public final class StateTransferService implements Listener {
         } else {
             targetEntity.getWorld().spawnParticle(Particle.ENCHANT, targetEntity.getLocation(), 25, 0.4, 0.4, 0.4, 0.8);
         }
-        clearCastSelection(caster);
+        sendSetupStillArmedMessage(caster);
     }
 
     private void finishProjectileCast(Player caster, GraftAspect aspect, String targetName, StateTransferPlan plan) {
@@ -333,17 +333,17 @@ public final class StateTransferService implements Listener {
         ));
         caster.sendMessage("\u00a77" + describeProjectileOutcome(plan));
         caster.playSound(caster.getLocation(), Sound.ENTITY_EVOKER_CAST_SPELL, 0.7f, 1.0f);
-        clearCastSelection(caster);
+        sendSetupStillArmedMessage(caster);
     }
 
     private void finishItemCast(Player caster, GraftAspect aspect, String targetName, ItemStack updated, StateTransferPlan plan) {
         caster.sendMessage("\u00a7b" + aspect.displayName() + " \u00a77applied to item \u00a76" + targetName + "\u00a77.");
         caster.sendMessage("\u00a77" + describeItemOutcome(plan, updated));
         caster.playSound(caster.getLocation(), Sound.ENTITY_EVOKER_CAST_SPELL, 0.7f, 1.0f);
-        clearCastSelection(caster);
+        sendSetupStillArmedMessage(caster);
     }
 
-    private void clearCastSelection(Player caster) {
+    private void sendSetupStillArmedMessage(Player caster) {
         caster.sendMessage("§8Your graft setup remains armed. Use §e/graft clear§8 when you want to reset it.");
     }
 

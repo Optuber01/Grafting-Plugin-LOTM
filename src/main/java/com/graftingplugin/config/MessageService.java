@@ -1,6 +1,7 @@
 package com.graftingplugin.config;
 
 import com.graftingplugin.GraftingPlugin;
+import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.YamlConfiguration;
 
@@ -8,6 +9,8 @@ import java.io.File;
 import java.util.Map;
 
 public final class MessageService {
+
+    private static final MiniMessage MINI_MESSAGE = MiniMessage.miniMessage();
 
     private final GraftingPlugin plugin;
     private YamlConfiguration messages;
@@ -32,12 +35,8 @@ public final class MessageService {
     public void send(CommandSender sender, String key, Map<String, String> placeholders) {
         String message = messages.getString(key, "<red>Missing message: " + key + "</red>");
         for (Map.Entry<String, String> entry : placeholders.entrySet()) {
-            message = message.replace("{" + entry.getKey() + "}", entry.getValue());
+            message = message.replace("{" + entry.getKey() + "}", MINI_MESSAGE.escapeTags(entry.getValue()));
         }
-        sender.sendMessage(stripMiniMessage(message));
-    }
-
-    private String stripMiniMessage(String input) {
-        return input.replaceAll("<[^>]+>", "");
+        sender.sendMessage(MINI_MESSAGE.deserialize(message));
     }
 }

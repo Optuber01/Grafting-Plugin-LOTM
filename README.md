@@ -84,7 +84,7 @@ Settings are in `config.yml` under `conceptual-graft`.
 - Right-click a block or entity with the focus.
 - Shift-right-click with no source selected to pick a fluid source.
 - Shift-left-click in air with no source selected to pick **Void**.
-- Double right-click in air to pick yourself as the source.
+- Double right-click in air or use `/graft self` to pick yourself as the source.
 - `/graft concept <name>` selects a practical concept source directly.
 - `/graft concept list` opens the practical concept catalog.
 - `/graft inventory` opens the inventory source picker.
@@ -163,6 +163,7 @@ Current behavior is intentionally narrow:
 | `/graft concept <name>` | Select a practical concept source directly. | `grafting.use` |
 | `/graft inventory` / `/graft inv` | Open the inventory source picker. | `grafting.use` |
 | `/graft target` | Open the inventory target slot picker. | `grafting.use` |
+| `/graft self` | Select yourself as the current source. | `grafting.use` |
 | `/graft aspect <aspect>` | Select an aspect directly. | `grafting.use` |
 | `/graft next` / `/graft cycle` | Cycle to the next compatible aspect. | `grafting.use` |
 | `/graft inspect` | Show the current graft setup. | `grafting.use` |
