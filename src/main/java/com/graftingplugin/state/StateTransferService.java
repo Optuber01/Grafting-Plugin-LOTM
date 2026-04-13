@@ -5,6 +5,7 @@ import com.graftingplugin.aspect.AspectEffectConfig;
 import com.graftingplugin.aspect.GraftAspect;
 import com.graftingplugin.aspect.PropertyModifier;
 import com.graftingplugin.cast.GraftFamily;
+import com.graftingplugin.cast.CastSourceReference;
 import com.graftingplugin.config.StateTransferSettings;
 import com.graftingplugin.subject.GraftSubject;
 import com.graftingplugin.validation.GraftCompatibilityResult;
@@ -93,6 +94,14 @@ public final class StateTransferService implements Listener {
     }
 
     public boolean applyToEntity(Player caster, GraftSubject source, GraftAspect aspect, Entity targetEntity) {
+        return applyToEntity(caster, source, CastSourceReference.none(), aspect, null, targetEntity);
+    }
+
+    public boolean applyToEntity(Player caster, GraftSubject source, CastSourceReference sourceReference, GraftAspect aspect, Entity targetEntity) {
+        return applyToEntity(caster, source, sourceReference, aspect, null, targetEntity);
+    }
+
+    public boolean applyToEntity(Player caster, GraftSubject source, CastSourceReference sourceReference, GraftAspect aspect, String selectedStatusEffectKey, Entity targetEntity) {
         GraftSubject target = plugin.subjectResolver().resolveEntity(targetEntity).orElse(null);
         if (target == null) {
             plugin.messages().send(caster, "no-target-found");
@@ -103,7 +112,8 @@ public final class StateTransferService implements Listener {
         if (plan == null) {
             return false;
         }
-        if (!applyEntityPlan(caster, source, aspect, target, targetEntity, plan)) {
+        if (!applyEntityPlan(caster, source, sourceReference, aspect, selectedStatusEffectKey, target, targetEntity, plan)) {
+            caster.sendMessage("§cThat source had no transferable " + aspect.displayName() + " state for this target.");
             return false;
         }
 
@@ -123,6 +133,7 @@ public final class StateTransferService implements Listener {
             return false;
         }
         if (!applyProjectilePlan(caster, source, aspect, target, projectile, plan)) {
+            caster.sendMessage("§cThat source had no transferable " + aspect.displayName() + " state for that projectile.");
             return false;
         }
 
@@ -131,6 +142,10 @@ public final class StateTransferService implements Listener {
     }
 
     public boolean applyToOffhandItem(Player caster, GraftSubject source, GraftAspect aspect) {
+        return applyToOffhandItem(caster, source, CastSourceReference.none(), aspect);
+    }
+
+    public boolean applyToOffhandItem(Player caster, GraftSubject source, CastSourceReference sourceReference, GraftAspect aspect) {
         ItemStack offhand = caster.getInventory().getItemInOffHand();
         if (offhand == null || offhand.getType().isAir() || plugin.focusItemService().isFocus(offhand)) {
             plugin.messages().send(caster, "no-target-found");
@@ -148,19 +163,27 @@ public final class StateTransferService implements Listener {
             return false;
         }
 
-        ItemStack updated = applyItemPlan(offhand, plan);
+        ItemTransferResult updated = applyItemPlan(caster, offhand, sourceReference, -2, plan);
         if (updated == null) {
             caster.sendMessage("\u00a7cThat carried item cannot express " + aspect.displayName() + ".");
             return false;
         }
 
-        caster.getInventory().setItemInOffHand(updated);
+        caster.getInventory().setItemInOffHand(updated.updatedTarget());
+        applyUpdatedSourceItem(caster, sourceReference, -2, updated.updatedSource());
         caster.updateInventory();
-        finishItemCast(caster, aspect, target.displayName(), updated, plan);
+        finishItemCast(caster, aspect, target.displayName(), updated.updatedTarget(), plan);
+        if (!updated.detail().isEmpty()) {
+            caster.sendMessage("§7" + updated.detail());
+        }
         return true;
     }
 
     public boolean applyToInventorySlot(Player caster, GraftSubject source, GraftAspect aspect, int slot) {
+        return applyToInventorySlot(caster, source, CastSourceReference.none(), aspect, slot);
+    }
+
+    public boolean applyToInventorySlot(Player caster, GraftSubject source, CastSourceReference sourceReference, GraftAspect aspect, int slot) {
         ItemStack[] storageContents = caster.getInventory().getStorageContents();
         if (slot < 0 || slot >= storageContents.length) {
             plugin.messages().send(caster, "no-target-found");
@@ -180,14 +203,18 @@ public final class StateTransferService implements Listener {
         if (plan == null) {
             return false;
         }
-        ItemStack updated = applyItemPlan(item, plan);
+        ItemTransferResult updated = applyItemPlan(caster, item, sourceReference, slot, plan);
         if (updated == null) {
             caster.sendMessage("\u00a7cThat item cannot express " + aspect.displayName() + ".");
             return false;
         }
-        caster.getInventory().setItem(slot, updated);
+        caster.getInventory().setItem(slot, updated.updatedTarget());
+        applyUpdatedSourceItem(caster, sourceReference, slot, updated.updatedSource());
         caster.updateInventory();
-        finishItemCast(caster, aspect, target.displayName(), updated, plan);
+        finishItemCast(caster, aspect, target.displayName(), updated.updatedTarget(), plan);
+        if (!updated.detail().isEmpty()) {
+            caster.sendMessage("§7" + updated.detail());
+        }
         return true;
     }
 
@@ -244,9 +271,9 @@ public final class StateTransferService implements Listener {
         return true;
     }
 
-    private boolean applyEntityPlan(Player caster, GraftSubject source, GraftAspect aspect, GraftSubject target, Entity targetEntity, StateTransferPlan plan) {
+    private boolean applyEntityPlan(Player caster, GraftSubject source, CastSourceReference sourceReference, GraftAspect aspect, String selectedStatusEffectKey, GraftSubject target, Entity targetEntity, StateTransferPlan plan) {
         return switch (plan.mode()) {
-            case ENTITY_EFFECT -> applyEntityEffect(caster, plan, targetEntity);
+            case ENTITY_EFFECT -> applyEntityEffect(caster, sourceReference, selectedStatusEffectKey, plan, targetEntity);
             case ENTITY_FIRE -> applyEntityFire(caster, aspect, targetEntity, plan.modifier());
             case ENTITY_BOUNCE -> applyEntityBounce(caster, source, aspect, target, targetEntity, plan.modifier());
             default -> false;
@@ -262,10 +289,13 @@ public final class StateTransferService implements Listener {
         };
     }
 
-    private ItemStack applyItemPlan(ItemStack targetItem, StateTransferPlan plan) {
+    private ItemTransferResult applyItemPlan(Player caster, ItemStack targetItem, CastSourceReference sourceReference, int targetSlot, StateTransferPlan plan) {
         return switch (plan.mode()) {
-            case ITEM_REPAIR -> applyItemRepair(targetItem, plan.modifier());
-            case ITEM_DAMAGE -> applyItemDamage(targetItem, plan.modifier());
+            case ITEM_REPAIR -> applyItemRepair(caster, targetItem, sourceReference, targetSlot, plan.modifier());
+            case ITEM_DAMAGE -> {
+                ItemStack updated = applyItemDamage(targetItem, plan.modifier());
+                yield updated == null ? null : new ItemTransferResult(updated, null, "");
+            }
             default -> null;
         };
     }
@@ -307,14 +337,14 @@ public final class StateTransferService implements Listener {
     }
 
     private void finishItemCast(Player caster, GraftAspect aspect, String targetName, ItemStack updated, StateTransferPlan plan) {
-        caster.sendMessage("\u00a7b" + aspect.displayName() + " \u00a77applied to offhand item \u00a76" + targetName + "\u00a77.");
+        caster.sendMessage("\u00a7b" + aspect.displayName() + " \u00a77applied to item \u00a76" + targetName + "\u00a77.");
         caster.sendMessage("\u00a77" + describeItemOutcome(plan, updated));
         caster.playSound(caster.getLocation(), Sound.ENTITY_EVOKER_CAST_SPELL, 0.7f, 1.0f);
         clearCastSelection(caster);
     }
 
     private void clearCastSelection(Player caster) {
-        plugin.castSessionManager().session(caster.getUniqueId()).clearSelection();
+        caster.sendMessage("§8Your graft setup remains armed. Use §e/graft clear§8 when you want to reset it.");
     }
 
     @EventHandler(ignoreCancelled = true)
@@ -437,33 +467,42 @@ public final class StateTransferService implements Listener {
         return plan;
     }
 
-    private boolean applyEntityEffect(Player caster, StateTransferPlan plan, Entity targetEntity) {
+    private boolean applyEntityEffect(Player caster, CastSourceReference sourceReference, String selectedStatusEffectKey, StateTransferPlan plan, Entity targetEntity) {
         if (!(targetEntity instanceof LivingEntity livingEntity)) {
             return false;
+        }
+
+        LivingEntity sourceLiving = resolveSourceLivingEntity(sourceReference);
+        if ((plan.aspect() == GraftAspect.HEAL || plan.aspect() == GraftAspect.STATUS) && sourceLiving != null && !sourceLiving.equals(livingEntity)) {
+            boolean transferred = applyTransferredEntityState(caster, sourceReference, plan.aspect(), selectedStatusEffectKey, livingEntity, plan.modifier());
+            if (!transferred) {
+                caster.sendMessage(plan.aspect() == GraftAspect.HEAL
+                    ? "§cNo transferable vitality was available on the source."
+                    : "§cNo active effects were available on the source to transfer.");
+            }
+            return transferred;
+        }
+        if (applyTransferredEntityState(caster, sourceReference, plan.aspect(), selectedStatusEffectKey, livingEntity, plan.modifier())) {
+            return true;
         }
 
         StateTransferSettings settings = plugin.settings().stateTransferSettings();
         GraftAspect aspect = plan.aspect();
         PropertyModifier mod = plan.modifier();
 
-
         int duration = (int) (settings.effectDurationTicks() * mod.durationMultiplier());
         int amp = mod.amplifier();
-
 
         AspectEffectConfig.EffectSpec spec = AspectEffectConfig.getSpec(aspect).orElse(null);
         if (spec == null || spec.primaryEffect() == null) {
             return false;
         }
 
-
         livingEntity.addPotionEffect(new PotionEffect(spec.primaryEffect(), duration, amp, true, true, true));
-
 
         if (spec.secondaryEffect() != null) {
             livingEntity.addPotionEffect(new PotionEffect(spec.secondaryEffect(), duration, amp, true, true, true));
         }
-
 
         if (aspect == GraftAspect.HEAL) {
             livingEntity.setHealth(Math.min(livingEntity.getMaxHealth(), livingEntity.getHealth() + settings.healAmount() * mod.intensity()));
@@ -479,7 +518,7 @@ public final class StateTransferService implements Listener {
             targetEntity.setFireTicks(Math.max(targetEntity.getFireTicks(), fireTicks));
         }
         if (aspect == GraftAspect.HEAT && targetEntity instanceof LivingEntity livingEntity) {
-            livingEntity.damage(plugin.settings().stateTransferSettings().heatDamage() * mod.intensity(), caster);
+            livingEntity.damage(plugin.settings().stateTransferSettings().heatDamage() * mod.intensity());
         }
         return true;
     }
@@ -540,17 +579,53 @@ public final class StateTransferService implements Listener {
         return true;
     }
 
-    private ItemStack applyItemRepair(ItemStack targetItem, PropertyModifier mod) {
-        if (!(targetItem.getItemMeta() instanceof Damageable damageable) || targetItem.getType().getMaxDurability() <= 0) {
-            return null;
+    private ItemTransferResult applyItemRepair(Player caster, ItemStack targetItem, CastSourceReference sourceReference, int targetSlot, PropertyModifier mod) {
+        ItemStack updatedTarget = targetItem.clone();
+        ItemStack updatedSource = null;
+        List<String> detailParts = new ArrayList<>();
+
+        ItemStack sourceItem = resolveReferencedSourceItem(caster, sourceReference, targetSlot);
+        if (sourceItem != null) {
+            updatedSource = sourceItem.clone();
+            transferCompatibleEnchantments(updatedSource, updatedTarget, detailParts);
         }
 
-        ItemStack updated = targetItem.clone();
-        Damageable updatedMeta = (Damageable) updated.getItemMeta();
-        int repairAmount = Math.max(1, (int) Math.round(targetItem.getType().getMaxDurability() * 0.12D * mod.intensity()));
-        updatedMeta.setDamage(Math.max(0, updatedMeta.getDamage() - repairAmount));
-        updated.setItemMeta(updatedMeta);
-        return updated;
+        boolean changed = false;
+        if (updatedTarget.getItemMeta() instanceof Damageable targetMeta && updatedTarget.getType().getMaxDurability() > 0) {
+            int targetMax = updatedTarget.getType().getMaxDurability();
+            int targetDamage = targetMeta.getDamage();
+            if (targetDamage > 0) {
+                int repairAmount = Math.max(1, (int) Math.round(targetMax * 0.12D * mod.intensity()));
+                if (updatedSource != null && updatedSource.getItemMeta() instanceof Damageable sourceMeta && updatedSource.getType().getMaxDurability() > 0) {
+                    int sourceMax = updatedSource.getType().getMaxDurability();
+                    int sourceRemaining = Math.max(0, sourceMax - sourceMeta.getDamage());
+                    double requestedFraction = (repairAmount / (double) targetMax);
+                    double availableFraction = Math.max(0.0D, (sourceRemaining - 1.0D) / sourceMax);
+                    double actualFraction = Math.min(requestedFraction, availableFraction);
+                    int actualRepair = Math.max(0, (int) Math.round(targetMax * actualFraction));
+                    int sourceCost = Math.max(0, (int) Math.round(sourceMax * actualFraction));
+                    if (actualRepair > 0) {
+                        targetMeta.setDamage(Math.max(0, targetDamage - actualRepair));
+                        updatedTarget.setItemMeta(targetMeta);
+                        Damageable updatedSourceMeta = (Damageable) updatedSource.getItemMeta();
+                        updatedSourceMeta.setDamage(Math.min(sourceMax - 1, updatedSourceMeta.getDamage() + sourceCost));
+                        updatedSource.setItemMeta(updatedSourceMeta);
+                        detailParts.add("Transferred item integrity from the source item.");
+                        changed = true;
+                    }
+                }
+                if (!changed) {
+                    targetMeta.setDamage(Math.max(0, targetDamage - repairAmount));
+                    updatedTarget.setItemMeta(targetMeta);
+                    changed = true;
+                }
+            }
+        }
+
+        if (!changed && detailParts.isEmpty()) {
+            return null;
+        }
+        return new ItemTransferResult(updatedTarget, updatedSource, String.join(" ", detailParts));
     }
 
     private ItemStack applyItemDamage(ItemStack targetItem, PropertyModifier mod) {
@@ -565,6 +640,155 @@ public final class StateTransferService implements Listener {
         updatedMeta.setDamage(Math.min(maxDamage - 1, updatedMeta.getDamage() + damageAmount));
         updated.setItemMeta(updatedMeta);
         return updated;
+    }
+
+    private LivingEntity resolveSourceLivingEntity(CastSourceReference sourceReference) {
+        if (sourceReference == null || !sourceReference.hasEntity()) {
+            return null;
+        }
+        Entity sourceEntity = plugin.getServer().getEntity(sourceReference.entityId());
+        return sourceEntity instanceof LivingEntity livingEntity && livingEntity.isValid() ? livingEntity : null;
+    }
+
+    private boolean applyTransferredEntityState(Player caster, CastSourceReference sourceReference, GraftAspect aspect, String selectedStatusEffectKey, LivingEntity target, PropertyModifier mod) {
+        LivingEntity sourceLiving = resolveSourceLivingEntity(sourceReference);
+        if (sourceLiving == null || sourceLiving.equals(target)) {
+            return false;
+        }
+
+        StateTransferSettings settings = plugin.settings().stateTransferSettings();
+        if (aspect == GraftAspect.HEAL) {
+            double requested = settings.healAmount() * mod.intensity();
+            double available = Math.max(0.0D, sourceLiving.getHealth() - 1.0D);
+            double transferred = Math.min(requested, available);
+            if (transferred <= 0.0D) {
+                return false;
+            }
+            sourceLiving.setHealth(sourceLiving.getHealth() - transferred);
+            double healed = Math.min(transferred, Math.max(0.0D, target.getMaxHealth() - target.getHealth()));
+            if (healed > 0.0D) {
+                target.setHealth(Math.min(target.getMaxHealth(), target.getHealth() + healed));
+            }
+            double overflow = transferred - healed;
+            if (overflow > 0.0D) {
+                try {
+                    target.setAbsorptionAmount(target.getAbsorptionAmount() + overflow);
+                } catch (Throwable ignored) {
+                }
+            }
+            caster.sendMessage("§7Transferred " + formatDouble(transferred) + " health from " + sourceLiving.getName() + " to " + target.getName() + (overflow > 0.0D ? " §8(" + formatDouble(overflow) + " as absorption)" : "") + ".");
+            return true;
+        }
+        if (aspect == GraftAspect.STATUS) {
+            List<String> moved = transferAllPotionEffects(sourceLiving, target, selectedStatusEffectKey, mod);
+            if (moved.isEmpty()) {
+                return false;
+            }
+            caster.sendMessage("§7Transferred effects from " + sourceLiving.getName() + " to " + target.getName() + ": " + String.join(", ", moved) + '.');
+            return true;
+        }
+
+        AspectEffectConfig.EffectSpec spec = AspectEffectConfig.getSpec(aspect).orElse(null);
+        if (spec == null || spec.primaryEffect() == null) {
+            return false;
+        }
+
+        boolean transferredAny = transferPotionEffect(sourceLiving, target, spec.primaryEffect(), settings.effectDurationTicks(), mod);
+        if (spec.secondaryEffect() != null) {
+            transferredAny = transferPotionEffect(sourceLiving, target, spec.secondaryEffect(), settings.effectDurationTicks(), mod) || transferredAny;
+        }
+        if (!transferredAny && aspect == GraftAspect.GLOW && sourceLiving.isGlowing()) {
+            target.addPotionEffect(new PotionEffect(PotionEffectType.GLOWING, Math.max(1, (int) Math.round(settings.effectDurationTicks() * mod.durationMultiplier())), mod.amplifier(), true, true, true));
+            sourceLiving.setGlowing(false);
+            transferredAny = true;
+        }
+        if (!transferredAny && aspect == GraftAspect.FREEZE) {
+            int sourceFreeze = sourceLiving.getFreezeTicks();
+            if (sourceFreeze > 0) {
+                int moved = Math.min(sourceFreeze, Math.max(60, (int) Math.round(100 * mod.durationMultiplier())));
+                sourceLiving.setFreezeTicks(Math.max(0, sourceFreeze - moved));
+                target.setFreezeTicks(Math.max(target.getFreezeTicks(), moved));
+                transferredAny = true;
+            }
+        }
+        return transferredAny;
+    }
+
+    private boolean transferPotionEffect(LivingEntity sourceLiving, LivingEntity target, PotionEffectType effectType, int maxDuration, PropertyModifier mod) {
+        PotionEffect sourceEffect = sourceLiving.getPotionEffect(effectType);
+        if (sourceEffect == null) {
+            return false;
+        }
+        int movedDuration = Math.min(sourceEffect.getDuration(), Math.max(1, (int) Math.round(maxDuration * mod.durationMultiplier())));
+        int amplifier = Math.max(sourceEffect.getAmplifier(), mod.amplifier());
+        target.addPotionEffect(new PotionEffect(effectType, movedDuration, amplifier, sourceEffect.isAmbient(), sourceEffect.hasParticles(), sourceEffect.hasIcon()));
+        int remaining = sourceEffect.getDuration() - movedDuration;
+        sourceLiving.removePotionEffect(effectType);
+        if (remaining > 0) {
+            sourceLiving.addPotionEffect(new PotionEffect(effectType, remaining, sourceEffect.getAmplifier(), sourceEffect.isAmbient(), sourceEffect.hasParticles(), sourceEffect.hasIcon()));
+        }
+        return true;
+    }
+
+    private List<String> transferAllPotionEffects(LivingEntity sourceLiving, LivingEntity target, String selectedStatusEffectKey, PropertyModifier mod) {
+        List<String> moved = new ArrayList<>();
+        for (PotionEffect sourceEffect : List.copyOf(sourceLiving.getActivePotionEffects())) {
+            if (selectedStatusEffectKey != null && !selectedStatusEffectKey.isBlank()
+                && !sourceEffect.getType().getKey().getKey().equalsIgnoreCase(selectedStatusEffectKey)) {
+                continue;
+            }
+            int movedDuration = Math.max(1, (int) Math.round(sourceEffect.getDuration() * 0.5D * mod.durationMultiplier()));
+            movedDuration = Math.min(sourceEffect.getDuration(), movedDuration);
+            int remaining = Math.max(0, sourceEffect.getDuration() - movedDuration);
+            int amplifier = Math.max(sourceEffect.getAmplifier(), mod.amplifier());
+            target.addPotionEffect(new PotionEffect(sourceEffect.getType(), movedDuration, amplifier, sourceEffect.isAmbient(), sourceEffect.hasParticles(), sourceEffect.hasIcon()));
+            sourceLiving.removePotionEffect(sourceEffect.getType());
+            if (remaining > 0) {
+                sourceLiving.addPotionEffect(new PotionEffect(sourceEffect.getType(), remaining, sourceEffect.getAmplifier(), sourceEffect.isAmbient(), sourceEffect.hasParticles(), sourceEffect.hasIcon()));
+            }
+            moved.add(sourceEffect.getType().getKey().getKey() + " " + formatSeconds(movedDuration));
+        }
+        return moved;
+    }
+
+    private ItemStack resolveReferencedSourceItem(Player caster, CastSourceReference sourceReference, int targetSlot) {
+        if (sourceReference == null || !sourceReference.hasInventorySlot()) {
+            return null;
+        }
+        int sourceSlot = sourceReference.inventorySlot();
+        if (sourceSlot < 0 || sourceSlot >= caster.getInventory().getStorageContents().length || sourceSlot == targetSlot) {
+            return null;
+        }
+        ItemStack sourceItem = caster.getInventory().getStorageContents()[sourceSlot];
+        return sourceItem == null || sourceItem.getType().isAir() || plugin.focusItemService().isFocus(sourceItem) ? null : sourceItem;
+    }
+
+    private void applyUpdatedSourceItem(Player caster, CastSourceReference sourceReference, int targetSlot, ItemStack updatedSource) {
+        if (sourceReference == null || !sourceReference.hasInventorySlot() || updatedSource == null) {
+            return;
+        }
+        int sourceSlot = sourceReference.inventorySlot();
+        if (sourceSlot < 0 || sourceSlot >= caster.getInventory().getStorageContents().length || sourceSlot == targetSlot) {
+            return;
+        }
+        caster.getInventory().setItem(sourceSlot, updatedSource);
+    }
+
+    private void transferCompatibleEnchantments(ItemStack sourceItem, ItemStack targetItem, List<String> detailParts) {
+        List<String> moved = new ArrayList<>();
+        for (Map.Entry<org.bukkit.enchantments.Enchantment, Integer> entry : List.copyOf(sourceItem.getEnchantments().entrySet())) {
+            org.bukkit.enchantments.Enchantment enchantment = entry.getKey();
+            int level = entry.getValue();
+            if (!enchantment.canEnchantItem(targetItem) && !targetItem.getEnchantments().containsKey(enchantment)) {
+                continue;
+            }
+            targetItem.addUnsafeEnchantment(enchantment, Math.max(level, targetItem.getEnchantmentLevel(enchantment)));
+            sourceItem.removeEnchantment(enchantment);
+            moved.add(enchantment.getKey().getKey());
+        }
+        if (!moved.isEmpty()) {
+            detailParts.add("Transferred enchantments: " + String.join(", ", moved) + '.');
+        }
     }
 
     private boolean applyProjectileBounce(Player caster, GraftSubject source, GraftAspect aspect, GraftSubject target, Projectile projectile, PropertyModifier mod) {
@@ -715,7 +939,7 @@ public final class StateTransferService implements Listener {
 
         if (spec.causesFire()) {
             if (aspect == GraftAspect.HEAT) {
-                entity.damage(settings.heatDamage() * mod.intensity(), caster);
+                entity.damage(settings.heatDamage() * mod.intensity());
             } else {
                 entity.setFireTicks(Math.max(entity.getFireTicks(), (int) Math.round(settings.igniteFireTicks() * mod.durationMultiplier())));
             }
@@ -846,7 +1070,10 @@ public final class StateTransferService implements Listener {
             parts.add("launches targets upward");
         }
         if (aspect == GraftAspect.HEAL) {
-            parts.add("restores health");
+            parts.add("transfers vitality from a living source");
+        }
+        if (aspect == GraftAspect.STATUS) {
+            parts.add("transfers active effects from a living source");
         }
         if (spec != null && spec.primaryEffect() != null) {
             parts.add("applies " + effectName(spec.primaryEffect()) + (spec.secondaryEffect() != null ? " + " + effectName(spec.secondaryEffect()) : ""));
@@ -1037,6 +1264,9 @@ public final class StateTransferService implements Listener {
             active.task().cancel();
             activeTasks.remove(active.task());
         }
+    }
+
+    private record ItemTransferResult(ItemStack updatedTarget, ItemStack updatedSource, String detail) {
     }
 
     private record ActiveProjectilePayload(UUID trackingId, GraftAspect aspect, PropertyModifier modifier, BukkitTask cleanupTask) {

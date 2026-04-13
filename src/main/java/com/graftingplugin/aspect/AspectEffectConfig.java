@@ -43,6 +43,8 @@ public final class AspectEffectConfig {
             new EffectSpec(PotionEffectType.POISON, null, Particle.SQUID_INK, false, false, false, 1.0)),
         Map.entry(GraftAspect.HEAL,
             new EffectSpec(PotionEffectType.REGENERATION, PotionEffectType.ABSORPTION, Particle.HEART, false, false, false, 1.0)),
+        Map.entry(GraftAspect.STATUS,
+            new EffectSpec(null, null, Particle.ENCHANT, false, false, false, 1.0)),
         Map.entry(GraftAspect.CONCEAL,
             new EffectSpec(PotionEffectType.INVISIBILITY, null, Particle.SMOKE, false, false, false, 1.0)),
         Map.entry(GraftAspect.HEAT,
@@ -113,6 +115,6 @@ public final class AspectEffectConfig {
     }
 
     public static boolean isPayloadAspect(GraftAspect aspect) {
-        return aspect.family() == GraftFamily.STATE && aspect != GraftAspect.BOUNCE;
+        return aspect.family() == GraftFamily.STATE && aspect != GraftAspect.BOUNCE && aspect != GraftAspect.STATUS;
     }
 }

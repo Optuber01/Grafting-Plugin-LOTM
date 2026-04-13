@@ -58,7 +58,9 @@ public final class GraftingPlugin extends JavaPlugin {
     @Override
     public void onEnable() {
         saveDefaultConfig();
-        saveResource("messages.yml", false);
+        if (!new java.io.File(getDataFolder(), "messages.yml").exists()) {
+            saveResource("messages.yml", false);
+        }
         reloadPluginState();
         registerCommands();
         registerListeners();

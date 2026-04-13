@@ -8,6 +8,7 @@ public record PluginSettings(
     Material focusMaterial,
     String focusName,
     int interactionRange,
+    boolean focusDebugEnabledByDefault,
     StateTransferSettings stateTransferSettings,
     RelationGraftSettings relationGraftSettings,
     TopologyGraftSettings topologyGraftSettings,
@@ -22,10 +23,12 @@ public record PluginSettings(
         }
         String focusName = config.getString("focus.name", "<light_purple>Mystic Focus</light_purple>");
         int interactionRange = Math.max(1, config.getInt("focus.interaction-range", 8));
+        boolean focusDebugEnabledByDefault = config.getBoolean("focus.debug-enabled-by-default", true);
         return new PluginSettings(
             focusMaterial,
             focusName,
             interactionRange,
+            focusDebugEnabledByDefault,
             StateTransferSettings.fromConfig(config),
             RelationGraftSettings.fromConfig(config),
             TopologyGraftSettings.fromConfig(config),

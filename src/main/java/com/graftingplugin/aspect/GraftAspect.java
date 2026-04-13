@@ -16,6 +16,7 @@ public enum GraftAspect {
     STICKY(GraftFamily.STATE, "sticky", "Sticky"),
     BOUNCE(GraftFamily.STATE, "bounce", "Bounce"),
     HEAL(GraftFamily.STATE, "heal", "Heal"),
+    STATUS(GraftFamily.STATE, "status", "Status"),
     POISON(GraftFamily.STATE, "poison", "Poison"),
     SPEED(GraftFamily.STATE, "speed", "Speed"),
     SLOW(GraftFamily.STATE, "slow", "Slow"),

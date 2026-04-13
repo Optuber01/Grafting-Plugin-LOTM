@@ -6,7 +6,13 @@ import com.graftingplugin.aspect.DynamicProperty;
 import com.graftingplugin.aspect.GraftAspect;
 import com.graftingplugin.cast.CastSession;
 import com.graftingplugin.cast.GraftFamily;
+import com.graftingplugin.state.StatusTransferSupport;
 import com.graftingplugin.subject.GraftSubject;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickEvent;
+import net.kyori.adventure.text.event.HoverEvent;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -44,6 +50,7 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
             case "target" -> handleTarget(sender);
             case "aspect" -> handleAspect(sender, args);
             case "next", "cycle" -> handleCycle(sender);
+            case "self" -> handleSelf(sender);
             case "clear" -> handleClear(sender);
             case "inspect" -> handleInspect(sender);
             case "active" -> handleActive(sender);
@@ -68,75 +75,62 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
         }
         page = Math.max(1, Math.min(page, 3));
 
-        sender.sendMessage("§5§l=== Grafting Help (" + page + "/3) §5§l===");
+        sender.sendMessage(Component.text("=== Grafting Help (" + page + "/3) ===", NamedTextColor.DARK_PURPLE, TextDecoration.BOLD)
+            .decoration(TextDecoration.ITALIC, false));
+
         switch (page) {
             case 1 -> {
-                sender.sendMessage("§d§lCore Loop:");
-                sender.sendMessage("§7  1. §f/graft mode <state|link|location|event>");
-                sender.sendMessage("§7  2. §fRight-Click a source with the Mystic Focus");
-                sender.sendMessage("§7  3. §fShift+Right-Click or /graft aspect to pick an aspect");
-                sender.sendMessage("§7  4. §fLeft-Click a target to cast");
-                sender.sendMessage("");
-                sender.sendMessage("§d§lFocus Controls:");
-                sender.sendMessage("§7  Right-Click §f-> Pick a source");
-                sender.sendMessage("§7  Shift+Right-Click §f-> Cycle aspects (or pick fluid with no source set)");
-                sender.sendMessage("§7  Left-Click §f-> Cast on the target");
-                sender.sendMessage("§7  Shift+Left-Click air §f-> Clear selection (or pick Void)");
-                sender.sendMessage("§7  Double Right-Click air §f-> Pick yourself as the source");
-                sender.sendMessage("");
-                sender.sendMessage("§d§lSource Types:");
-                sender.sendMessage("§7  Concrete  §f-> Right-Click a block, entity, or container");
-                sender.sendMessage("§7  Concept   §f-> /graft concept <name> or /graft concept list");
-                sender.sendMessage("§7  Inventory §f-> /graft inventory opens your item picker as source");
-                sender.sendMessage("§8  /graft concept alone opens the §5Conceptual Graft§8 menu for rare laws and rewrites.");
+                sender.sendMessage(section("Core Loop"));
+                sender.sendMessage(text("1. Pick a mode, then pick a source, then cast.", NamedTextColor.GRAY));
+                sender.sendMessage(modeButtons());
+                sender.sendMessage(text("2. Right-Click a block/entity, or use the source shortcuts below.", NamedTextColor.GRAY));
+                sender.sendMessage(sourceButtons());
+                sender.sendMessage(text("3. Shift-Right-Click or /graft next cycles aspects.", NamedTextColor.GRAY));
+                sender.sendMessage(text("4. Left-Click a target to cast. Your setup now stays armed until /graft clear.", NamedTextColor.GRAY));
+                sender.sendMessage(Component.empty());
+                sender.sendMessage(section("Reliable Source Shortcuts"));
+                sender.sendMessage(text("• /graft self — select yourself as the source", NamedTextColor.GRAY));
+                sender.sendMessage(text("• Sneak + Left-Click air — clear your current source/aspect", NamedTextColor.GRAY));
+                sender.sendMessage(text("• Sneak + Right-Click with no source — select the water/lava you are looking at", NamedTextColor.GRAY));
+                sender.sendMessage(text("• /graft inventory — pick an item from your inventory as source", NamedTextColor.GRAY));
+                sender.sendMessage(text("• /graft concept list — open practical concept sources", NamedTextColor.GRAY));
             }
             case 2 -> {
-                sender.sendMessage("§d§lPractical Graft Workflows:");
-                sender.sendMessage("§7  Item repair: §fMode state, Heal aspect, Left-Click offhand item OR /graft target.");
-                sender.sendMessage("§7  Inv slot -> Chest: §e/graft inventory §f-> pick item, mode link, Left-Click chest.");
-                sender.sendMessage("§7  Inv slot -> Player: §e/graft inventory §f-> pick item, mode link, Left-Click a player.");
-                sender.sendMessage("§7  Chest -> Player: §fMode link, Right-Click source chest, Left-Click a player.");
-                sender.sendMessage("§7  Chest -> Chest: §fMode link, Right-Click source chest, Left-Click target chest.");
-                sender.sendMessage("§7  Slot -> Slot (your inventory): §e/graft inventory §f+ §e/graft target §f-> picks both slots, then Left-Click.");
-                sender.sendMessage("");
-                sender.sendMessage("§d§lItem Targeting:");
-                sender.sendMessage("§7  Offhand: §fHold any item in offhand. It is auto-targeted when you cast in air.");
-                sender.sendMessage("§7  Slot: §e/graft target §fpicks a specific inventory slot as target instead.");
-                sender.sendMessage("§8  /graft target overrides offhand targeting for that cast.");
-                sender.sendMessage("");
-                sender.sendMessage("§d§lState Reassignment:");
-                sender.sendMessage("§7  Health/vitality: §fMode state, Heal aspect, cast on a player or mob.");
-                sender.sendMessage("§7  Temperature: §fMode state, Heat or Freeze aspect, cast on entity or block.");
-                sender.sendMessage("§7  Movement: §fMode state, Speed/Slow/Bounce aspect, cast on entity or projectile.");
+                sender.sendMessage(section("Practical Workflows"));
+                sender.sendMessage(text("• State Graft: move a state like heat, heal, speed, poison, freeze, glow.", NamedTextColor.GRAY));
+                sender.sendMessage(text("• Link Graft: aggro redirect, tethers, projectile retargets, item/container routing.", NamedTextColor.GRAY));
+                sender.sendMessage(text("• Location Graft: temporary anchor links and loops between places.", NamedTextColor.GRAY));
+                sender.sendMessage(text("• Event Graft: On Hit payloads and On Open relays.", NamedTextColor.GRAY));
+                sender.sendMessage(Component.empty());
+                sender.sendMessage(section("Item Work"));
+                sender.sendMessage(text("• Offhand item: cast in air while holding the item in your offhand.", NamedTextColor.GRAY));
+                sender.sendMessage(commandLine("/graft target", "Pick a specific inventory slot as the target."));
+                sender.sendMessage(commandLine("/graft inventory", "Pick an inventory item as the source."));
+                sender.sendMessage(Component.empty());
+                sender.sendMessage(section("Common Practical Examples"));
+                sender.sendMessage(text("• Repair item: mode state → source with Heal → cast onto offhand/target slot.", NamedTextColor.GRAY));
+                sender.sendMessage(text("• Chest routing: mode link → source chest → target chest.", NamedTextColor.GRAY));
+                sender.sendMessage(text("• Aggro redirect: mode link → hostile mob source → player/mob target.", NamedTextColor.GRAY));
             }
             case 3 -> {
-                sender.sendMessage("§d§lModes:");
-                sender.sendMessage("§9* State Graft §f-> Heat, light, speed, heal, freeze, poison, bounce, glow");
-                sender.sendMessage("§c* Link Graft §f-> Aggro redirect, tethers, projectile retarget, container routing");
-                sender.sendMessage("§a* Location Graft §f-> Anchor links, path loops");
-                sender.sendMessage("§6* Event Graft §f-> On Hit and On Open triggers");
-                sender.sendMessage("");
-                sender.sendMessage("§d§lAdmin Commands:");
-                sender.sendMessage("§e  /graft active §f-> Show your active grafts");
-                sender.sendMessage("§e  /graft debug §f-> Toggle debug logging");
-                sender.sendMessage("§e  /graft clearactive [player] §f-> Clear active grafts");
-                sender.sendMessage("§e  /graft givefocus [player] §f-> Give a Mystic Focus");
-                sender.sendMessage("§e  /graft reload §f-> Reload config");
-                sender.sendMessage("");
-                sender.sendMessage("§d§lConceptual Grafting:");
-                sender.sendMessage("§7  /graft concept §f-> Opens the §5Conceptual Graft§f menu for rare laws, identities, and rewrites.");
-                sender.sendMessage("§7  /graft concept list §f-> Opens the practical concept catalog.");
-                sender.sendMessage("§7  /graft concept <name> §f-> Directly selects a practical concept source.");
-                sender.sendMessage("§8  Conceptual casts stay separate from your practical mode/source/aspect setup.");
-                sender.sendMessage("");
-                sender.sendMessage("§d§lUseful Notes:");
-                sender.sendMessage("§7  /graft clear resets source and aspect, keeps current mode.");
-                sender.sendMessage("§7  /graft inspect shows both your practical setup and any armed conceptual cast.");
+                sender.sendMessage(section("Conceptual Grafting"));
+                sender.sendMessage(commandLine("/graft concept", "Open the conceptual graft menu."));
+                sender.sendMessage(text("Conceptual grafts are rare, temporary, localized effects separate from practical mode/source/aspect setup.", NamedTextColor.GRAY));
+                sender.sendMessage(text("Beginning ↔ End and Threshold → Elsewhere are anchor-based; the other conceptual grafts are zone laws.", NamedTextColor.GRAY));
+                sender.sendMessage(Component.empty());
+                sender.sendMessage(section("Runtime & Cleanup"));
+                sender.sendMessage(commandLine("/graft inspect", "See your current practical setup and armed conceptual cast."));
+                sender.sendMessage(commandLine("/graft active", "See your active practical and conceptual runtime grafts."));
+                sender.sendMessage(commandLine("/graft clear", "Clear your selected source/aspect only."));
+                sender.sendMessage(commandLine("/graft clearactive", "Admin: clear active runtime grafts."));
+                sender.sendMessage(Component.empty());
+                sender.sendMessage(section("Important Notes"));
+                sender.sendMessage(text("• /graft clear does not cancel already-active runtime grafts; use /graft active or /graft clearactive for that.", NamedTextColor.GRAY));
+                sender.sendMessage(text("• Practical Sky is a routine source (speed/light/bounce); Sky → Ground is the conceptual law version.", NamedTextColor.GRAY));
             }
         }
-        if (page < 3) {
-            sender.sendMessage("§7Use §e/graft help " + (page + 1) + " §7for the next page.");
-        }
+
+        sender.sendMessage(helpNav(page));
     }
 
     private void handleMode(CommandSender sender, String[] args) {
@@ -232,6 +226,14 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
         plugin.focusInteractionListener().cycleAspectSelection(player);
     }
 
+    private void handleSelf(CommandSender sender) {
+        Player player = requirePlayer(sender);
+        if (player == null) {
+            return;
+        }
+        plugin.focusInteractionListener().selectSelfSourceCommand(player);
+    }
+
     private void handleClear(CommandSender sender) {
         Player player = requirePlayer(sender);
         if (player == null) {
@@ -270,7 +272,7 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
                 player.sendMessage("\u00a78Concept sources are named identities, not physical objects.");
             }
         }
-        player.sendMessage("\u00a7dAspect: \u00a7f" + (session.selectedAspect() == null ? "\u00a77none" : session.selectedAspect().displayName()));
+        player.sendMessage("\u00a7dAspect: \u00a7f" + selectedAspectLabel(session));
         if (session.selectedTargetSlot() >= 0) {
             org.bukkit.inventory.ItemStack tgtItem = player.getInventory().getStorageContents()[session.selectedTargetSlot()];
             String tgtName = (tgtItem != null && !tgtItem.getType().isAir()) ? tgtItem.getType().name().toLowerCase(java.util.Locale.ROOT) : "empty";
@@ -282,7 +284,10 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
         player.sendMessage("\u00a7dAvailable aspects: " + formatAspectList(supported));
         if (session.source() != null) {
             List<GraftAspect> compat = plugin.compatibilityValidator().compatibleSourceAspects(session.family(), session.source());
-            player.sendMessage("\u00a7dFrom this source: " + (compat.isEmpty() ? "\u00a77none" : formatAspectList(compat)));
+            player.sendMessage("\u00a7dFrom this source: " + formatSourceAspectList(session, compat));
+            if (compat.contains(GraftAspect.STATUS)) {
+                player.sendMessage("\u00a7dActive source effects: \u00a77" + StatusTransferSupport.formatAvailableEffects(plugin, session.sourceReference()));
+            }
             String props = formatProperties(session.source());
             if (!props.isEmpty()) {
                 player.sendMessage("\u00a7dProperties: \u00a77" + props);
@@ -341,11 +346,14 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
         sender.sendMessage("Graft status for " + target.getName() + ":");
         sender.sendMessage("- Mode: " + session.family().displayName());
         sender.sendMessage("- Source: " + describeSource(session));
-        sender.sendMessage("- Aspect: " + (session.selectedAspect() == null ? "none" : session.selectedAspect().displayName()));
+        sender.sendMessage("- Aspect: " + selectedAspectLabel(session));
         sender.sendMessage("- Supported aspects: " + formatAspectList(plugin.compatibilityValidator().supportedFamilyAspects(session.family())));
         if (session.source() != null) {
             List<GraftAspect> compatibleAspects = plugin.compatibilityValidator().compatibleSourceAspects(session.family(), session.source());
-            sender.sendMessage("- Source-compatible aspects: " + (compatibleAspects.isEmpty() ? "none" : formatAspectList(compatibleAspects)));
+            sender.sendMessage("- Source-compatible aspects: " + formatSourceAspectList(session, compatibleAspects));
+            if (compatibleAspects.contains(GraftAspect.STATUS)) {
+                sender.sendMessage("- Active source effects: " + StatusTransferSupport.formatAvailableEffects(plugin, session.sourceReference()));
+            }
             sender.sendMessage("- Source properties: " + formatProperties(session.source()));
         }
 
@@ -439,8 +447,8 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
     }
 
     private void sendUsage(CommandSender sender) {
-        sender.sendMessage("\u00a7dGrafting Plugin \u00a77- Use \u00a7e/graft help \u00a77for a quick guide.");
-        sender.sendMessage("/graft help|mode|concept|inventory|inv|target|aspect|next|cycle|inspect|clear|active|debug");
+        sender.sendMessage("\u00a7dGrafting Plugin \u00a77- Use \u00a7e/graft help \u00a77for a clickable guide.");
+        sender.sendMessage("/graft help|mode|concept|inventory|inv|target|aspect|next|cycle|self|inspect|clear|active|debug");
         sender.sendMessage("/graft status|clearactive|givefocus|reload");
         sender.sendMessage("\u00a77Modes: \u00a7estate \u00a77| \u00a7elink \u00a77| \u00a7elocation \u00a77| \u00a7eevent");
     }
@@ -456,7 +464,7 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (args.length == 1) {
-            return filter(List.of("help", "mode", "concept", "inventory", "inv", "target", "aspect", "next", "cycle", "inspect", "clear", "active", "debug", "status", "clearactive", "givefocus", "reload"), args[0]);
+            return filter(List.of("help", "mode", "concept", "inventory", "inv", "target", "aspect", "next", "cycle", "self", "inspect", "clear", "active", "debug", "status", "clearactive", "givefocus", "reload"), args[0]);
         }
         if (args.length == 2 && args[0].equalsIgnoreCase("mode")) {
             return filter(List.of("state", "link", "location", "event"), args[1]);
@@ -483,6 +491,94 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
             return filter(Bukkit.getOnlinePlayers().stream().map(Player::getName).toList(), args[1]);
         }
         return List.of();
+    }
+
+    private Component helpNav(int page) {
+        Component previous = page <= 1
+            ? text("[« Prev]", NamedTextColor.DARK_GRAY)
+            : button("[« Prev]", "/graft help " + (page - 1), "Open help page " + (page - 1));
+        Component next = page >= 3
+            ? text("[Next »]", NamedTextColor.DARK_GRAY)
+            : button("[Next »]", "/graft help " + (page + 1), "Open help page " + (page + 1));
+        return Component.empty()
+            .append(previous)
+            .append(Component.text("  "))
+            .append(next)
+            .append(Component.text("  "))
+            .append(button("[Inspect]", "/graft inspect", "Show your current setup"));
+    }
+
+    private Component modeButtons() {
+        return Component.empty()
+            .append(button("[State]", "/graft mode state", "Move a state onto a target"))
+            .append(Component.text(" "))
+            .append(button("[Link]", "/graft mode link", "Link a source to a target"))
+            .append(Component.text(" "))
+            .append(button("[Location]", "/graft mode location", "Bend space between anchors"))
+            .append(Component.text(" "))
+            .append(button("[Event]", "/graft mode event", "Load an On Hit / On Open trigger"));
+    }
+
+    private Component sourceButtons() {
+        return Component.empty()
+            .append(button("[Self]", "/graft self", "Select yourself as the source"))
+            .append(Component.text(" "))
+            .append(button("[Inventory]", "/graft inventory", "Pick an inventory item as the source"))
+            .append(Component.text(" "))
+            .append(button("[Concepts]", "/graft concept list", "Open practical concept sources"));
+    }
+
+    private Component commandLine(String command, String description) {
+        return Component.empty()
+            .append(button(command, command, description))
+            .append(Component.text(" — " + description, NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false));
+    }
+
+    private Component section(String title) {
+        return Component.text(title, NamedTextColor.LIGHT_PURPLE, TextDecoration.BOLD).decoration(TextDecoration.ITALIC, false);
+    }
+
+    private Component text(String value, NamedTextColor color) {
+        return Component.text(value, color).decoration(TextDecoration.ITALIC, false);
+    }
+
+    private Component button(String label, String command, String hover) {
+        return Component.text(label, NamedTextColor.AQUA, TextDecoration.BOLD)
+            .decoration(TextDecoration.ITALIC, false)
+            .clickEvent(ClickEvent.runCommand(command))
+            .hoverEvent(HoverEvent.showText(Component.text(hover, NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false)));
+    }
+
+    private String selectedAspectLabel(CastSession session) {
+        if (session.selectedAspect() == null) {
+            return "§7none";
+        }
+        if (session.selectedAspect() != GraftAspect.STATUS) {
+            return session.selectedAspect().displayName();
+        }
+        return StatusTransferSupport.selectedLabel(plugin, session.sourceReference(), session.selectedStatusEffectKey());
+    }
+
+    private String formatSourceAspectList(CastSession session, List<GraftAspect> aspects) {
+        if (aspects.isEmpty()) {
+            return "§7none";
+        }
+        List<String> labels = new ArrayList<>();
+        for (GraftAspect aspect : aspects) {
+            if (aspect == GraftAspect.STATUS) {
+                List<org.bukkit.potion.PotionEffectType> available = StatusTransferSupport.availableEffects(plugin, session.sourceReference());
+                if (available.isEmpty()) {
+                    labels.add("status");
+                } else {
+                    for (org.bukkit.potion.PotionEffectType effectType : available) {
+                        labels.add(StatusTransferSupport.displayName(effectType));
+                    }
+                }
+                continue;
+            }
+            labels.add(aspect.key());
+        }
+        return String.join(", ", labels);
     }
 
     private String formatAspectList(List<GraftAspect> aspects) {

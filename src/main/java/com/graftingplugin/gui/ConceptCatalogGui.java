@@ -44,7 +44,7 @@ public final class ConceptCatalogGui implements Listener {
 
     public void openConceptualGraftMenu(Player player) {
         Collection<ConceptGraftDefinition> grafts = plugin.conceptGraftCatalog().all();
-        int size = Math.min(MAX_SIZE, roundUpToNine(grafts.size() + 1));
+        int size = Math.min(MAX_SIZE, roundUpToNine(grafts.size()));
         if (size == 0) {
             size = 9;
         }
@@ -54,27 +54,12 @@ public final class ConceptCatalogGui implements Listener {
 
         int slot = 0;
         for (ConceptGraftDefinition graft : grafts) {
-            if (slot >= size - 1) {
+            if (slot >= size) {
                 break;
             }
             inventory.setItem(slot, createGraftIcon(graft));
             slot++;
         }
-
-        ItemStack practicalButton = new ItemStack(Material.BOOK);
-        ItemMeta practicalMeta = practicalButton.getItemMeta();
-        if (practicalMeta != null) {
-            practicalMeta.displayName(Component.text("Practical Concepts \u00bb", NamedTextColor.GRAY, TextDecoration.BOLD)
-                .decoration(TextDecoration.ITALIC, false));
-            List<Component> lore = new ArrayList<>();
-            lore.add(Component.text("Open the routine concept catalog", NamedTextColor.DARK_GRAY).decoration(TextDecoration.ITALIC, false));
-            lore.add(Component.text("for everyday practical aspect grafts.", NamedTextColor.DARK_GRAY).decoration(TextDecoration.ITALIC, false));
-            practicalMeta.lore(lore);
-            practicalMeta.getPersistentDataContainer().set(
-                new NamespacedKey(plugin, "gui_action"), PersistentDataType.STRING, "open_practical");
-            practicalButton.setItemMeta(practicalMeta);
-        }
-        inventory.setItem(size - 1, practicalButton);
 
         player.openInventory(inventory);
     }
@@ -179,14 +164,6 @@ public final class ConceptCatalogGui implements Listener {
             return;
         }
 
-        String guiAction = meta.getPersistentDataContainer().getOrDefault(
-            new NamespacedKey(plugin, "gui_action"), PersistentDataType.STRING, "");
-        if ("open_practical".equals(guiAction)) {
-            player.closeInventory();
-            open(player);
-            return;
-        }
-
         String graftKey = meta.getPersistentDataContainer().getOrDefault(
             new NamespacedKey(plugin, "conceptual_graft_key"), PersistentDataType.STRING, "");
         if (graftKey.isEmpty()) {
@@ -233,21 +210,23 @@ public final class ConceptCatalogGui implements Listener {
         ItemStack icon = new ItemStack(graft.iconMaterial());
         ItemMeta meta = icon.getItemMeta();
         if (meta != null) {
-            meta.displayName(Component.text("\u2726 " + graft.displayName(), NamedTextColor.DARK_PURPLE, TextDecoration.BOLD)
+            meta.displayName(Component.text("\u2726 " + shortGraftName(graft.type()), NamedTextColor.DARK_PURPLE, TextDecoration.BOLD)
                 .decoration(TextDecoration.ITALIC, false));
             List<Component> lore = new ArrayList<>();
             lore.add(Component.empty());
-            lore.add(Component.text(graft.description(), NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false));
+            for (String line : wrapLore(graft.description(), 34)) {
+                lore.add(Component.text(line, NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false));
+            }
             lore.add(Component.empty());
             if (!graft.type().requiresTwoAnchors()) {
-                lore.add(Component.text("Imposes a law over a zone", NamedTextColor.GOLD).decoration(TextDecoration.ITALIC, false));
-                lore.add(Component.text("Left-Click a center point to place it", NamedTextColor.DARK_GRAY).decoration(TextDecoration.ITALIC, false));
+                lore.add(Component.text("Zone law", NamedTextColor.GOLD).decoration(TextDecoration.ITALIC, false));
+                lore.add(Component.text("Left-Click a center point", NamedTextColor.DARK_GRAY).decoration(TextDecoration.ITALIC, false));
             } else if (graft.type().firstAnchorComesFromCaster()) {
-                lore.add(Component.text("Identifies two locations as one path", NamedTextColor.GOLD).decoration(TextDecoration.ITALIC, false));
-                lore.add(Component.text("First anchor is your current position", NamedTextColor.DARK_GRAY).decoration(TextDecoration.ITALIC, false));
+                lore.add(Component.text("Two-anchor identity", NamedTextColor.GOLD).decoration(TextDecoration.ITALIC, false));
+                lore.add(Component.text("First anchor = your position", NamedTextColor.DARK_GRAY).decoration(TextDecoration.ITALIC, false));
             } else {
-                lore.add(Component.text("Rewrites one threshold to open elsewhere", NamedTextColor.GOLD).decoration(TextDecoration.ITALIC, false));
-                lore.add(Component.text("Requires two container anchors", NamedTextColor.DARK_GRAY).decoration(TextDecoration.ITALIC, false));
+                lore.add(Component.text("Threshold rewrite", NamedTextColor.GOLD).decoration(TextDecoration.ITALIC, false));
+                lore.add(Component.text("Two container anchors", NamedTextColor.DARK_GRAY).decoration(TextDecoration.ITALIC, false));
             }
             lore.add(Component.empty());
             lore.add(Component.text("Click to begin", NamedTextColor.LIGHT_PURPLE).decoration(TextDecoration.ITALIC, false));
@@ -293,6 +272,39 @@ public final class ConceptCatalogGui implements Listener {
             icon.setItemMeta(meta);
         }
         return icon;
+    }
+
+    private String shortGraftName(ConceptGraftType type) {
+        return switch (type) {
+            case SUN_TO_GROUND -> "Sun Ground";
+            case SKY_TO_GROUND -> "Sky Ground";
+            case NETHER_ZONE -> "Nether Zone";
+            case END_ZONE -> "End Zone";
+            case OVERWORLD_ZONE -> "Overworld Zone";
+            case CONCEALMENT_TO_RECOGNITION -> "Conceal → Recognize";
+            case BEGINNING_TO_END -> "Beginning ↔ End";
+            case THRESHOLD_TO_ELSEWHERE -> "Threshold Elsewhere";
+        };
+    }
+
+    private List<String> wrapLore(String text, int maxLength) {
+        List<String> lines = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        for (String word : text.split(" ")) {
+            if (!current.isEmpty() && current.length() + 1 + word.length() > maxLength) {
+                lines.add(current.toString());
+                current = new StringBuilder(word);
+            } else {
+                if (!current.isEmpty()) {
+                    current.append(' ');
+                }
+                current.append(word);
+            }
+        }
+        if (!current.isEmpty()) {
+            lines.add(current.toString());
+        }
+        return lines;
     }
 
     private Material iconMaterial(ConceptDefinition concept) {

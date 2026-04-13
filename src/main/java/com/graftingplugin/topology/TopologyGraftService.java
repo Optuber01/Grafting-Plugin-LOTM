@@ -79,7 +79,7 @@ public final class TopologyGraftService implements Listener {
             return false;
         }
 
-        plugin.castSessionManager().session(caster.getUniqueId()).clearSelection();
+        caster.sendMessage("§8Your graft setup remains armed. Use §e/graft clear§8 when you want to reset it.");
         return true;
     }
 
@@ -110,7 +110,7 @@ public final class TopologyGraftService implements Listener {
             return false;
         }
 
-        plugin.castSessionManager().session(caster.getUniqueId()).clearSelection();
+        caster.sendMessage("§8Your graft setup remains armed. Use §e/graft clear§8 when you want to reset it.");
         return true;
     }
 

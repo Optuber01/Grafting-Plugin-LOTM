@@ -6,6 +6,7 @@ import com.graftingplugin.gui.ConceptCatalogGui;
 import com.graftingplugin.cast.CastSourceReference;
 import com.graftingplugin.cast.CastSession;
 import com.graftingplugin.cast.GraftFamily;
+import com.graftingplugin.state.StatusTransferSupport;
 import com.graftingplugin.subject.GraftSubject;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.FluidCollisionMode;
@@ -25,6 +26,7 @@ import org.bukkit.event.block.BlockDamageEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.util.RayTraceResult;
@@ -42,6 +44,7 @@ public final class FocusInteractionListener implements Listener {
     private final GraftingPlugin plugin;
     private final Map<UUID, Long> lastRightClickTime = new ConcurrentHashMap<>();
     private final Map<UUID, Boolean> debugEnabled = new ConcurrentHashMap<>();
+    private final java.util.Set<UUID> castReentryGuard = ConcurrentHashMap.newKeySet();
 
     public FocusInteractionListener(GraftingPlugin plugin) {
         this.plugin = plugin;
@@ -49,14 +52,19 @@ public final class FocusInteractionListener implements Listener {
 
 
     public void logStartup() {
+        if (!plugin.settings().focusDebugEnabledByDefault()) {
+            plugin.getLogger().info("GraftingPlugin focus listener active. Debug logging is disabled by default.");
+            return;
+        }
         plugin.getLogger().info("[GraftDebug] ============================================");
         plugin.getLogger().info("[GraftDebug] FocusInteractionListener REGISTERED and ACTIVE");
         plugin.getLogger().info("[GraftDebug] Control scheme:");
         plugin.getLogger().info("[GraftDebug]   Right-Click = Select source");
         plugin.getLogger().info("[GraftDebug]   Left-Click = Cast onto target");
         plugin.getLogger().info("[GraftDebug]   Shift+Right-Click = Cycle aspect / Select fluid");
-        plugin.getLogger().info("[GraftDebug]   Shift+Left-Click air = Clear selection / Select void");
+        plugin.getLogger().info("[GraftDebug]   Shift+Left-Click air = Clear selection");
         plugin.getLogger().info("[GraftDebug]   Double Right-Click air = Self as source");
+        plugin.getLogger().info("[GraftDebug]   Config default debug = true");
         plugin.getLogger().info("[GraftDebug] ============================================");
     }
 
@@ -74,6 +82,20 @@ public final class FocusInteractionListener implements Listener {
 
     public void cycleAspectSelection(Player player) {
         cycleAspect(player);
+    }
+
+    public void selectSelfSourceCommand(Player player) {
+        selectSelfSource(player);
+    }
+
+    @EventHandler
+    public void onPlayerJoin(PlayerJoinEvent event) {
+        if (!plugin.settings().focusDebugEnabledByDefault()) {
+            return;
+        }
+        Player player = event.getPlayer();
+        setDebugEnabled(player, true);
+        player.sendMessage("§aGraft debug logging is enabled by default on this server. Use §e/graft debug§a to toggle it.");
     }
 
     private void handleLeftClick(Player player, Action action, Block targetBlock, CastSession session) {
@@ -104,6 +126,11 @@ public final class FocusInteractionListener implements Listener {
                 return;
             }
             if (pending.firstAnchor() == null) {
+                if (targetBlock != null && targetBlock.getType() == org.bukkit.Material.ENDER_CHEST) {
+                    player.sendMessage("§cThreshold → Elsewhere does not support ender chests.");
+                    sendActionBar(player, "§cChoose a normal container, not an ender chest");
+                    return;
+                }
                 if (!(targetBlock != null && targetBlock.getState() instanceof Container)) {
                     player.sendMessage("\u00a7cThreshold → Elsewhere needs a container as the first anchor.");
                     sendActionBar(player, "\u00a7cChoose a container as the source threshold");
@@ -123,13 +150,8 @@ public final class FocusInteractionListener implements Listener {
         }
 
         if (player.isSneaking() && action == Action.LEFT_CLICK_AIR) {
-            if (session.source() != null) {
-                debugLog(player, "Shift+Left-Click: CLEARING selection (source was %s)", session.source().displayName());
-                clearSelection(player);
-            } else {
-                debugLog(player, "Shift+Left-Click: selecting void source (no source active)");
-                selectVoidSource(player);
-            }
+            debugLog(player, "Shift+Left-Click: CLEARING selection (source was %s)", session.source() != null ? session.source().displayName() : "none");
+            clearSelection(player);
             return;
         }
 
@@ -252,20 +274,24 @@ public final class FocusInteractionListener implements Listener {
         if (!(event.getDamager() instanceof Player player) || !isHoldingFocus(player)) {
             return;
         }
-        if (event.getEntity().equals(player)) {
+        if (event.getEntity().equals(player) || !castReentryGuard.add(player.getUniqueId())) {
             return;
         }
 
-        event.setCancelled(true);
-        CastSession session = plugin.castSessionManager().session(player.getUniqueId());
+        try {
+            event.setCancelled(true);
+            CastSession session = plugin.castSessionManager().session(player.getUniqueId());
 
-        debugLog(player, "Left-Click Entity: casting onto entity target=%s", event.getEntity().getType());
-        if (readyForCast(player)) {
-            applyCast(player, null, event.getEntity());
-            return;
+            debugLog(player, "Left-Click Entity: casting onto entity target=%s", event.getEntity().getType());
+            if (readyForCast(player)) {
+                applyCast(player, null, event.getEntity());
+                return;
+            }
+
+            sendNotReadyFeedback(player, session);
+        } finally {
+            castReentryGuard.remove(player.getUniqueId());
         }
-
-        sendNotReadyFeedback(player, session);
     }
 
 
@@ -298,6 +324,23 @@ public final class FocusInteractionListener implements Listener {
         }
 
         GraftAspect current = session.selectedAspect();
+        if (current == GraftAspect.STATUS) {
+            List<org.bukkit.potion.PotionEffectType> availableEffects = StatusTransferSupport.availableEffects(plugin, session.sourceReference());
+            if (!availableEffects.isEmpty()) {
+                org.bukkit.potion.PotionEffectType currentEffect = StatusTransferSupport.resolveEffect(plugin, session.sourceReference(), session.selectedStatusEffectKey());
+                int currentEffectIndex = availableEffects.indexOf(currentEffect);
+                if (currentEffectIndex >= 0 && currentEffectIndex < availableEffects.size() - 1) {
+                    org.bukkit.potion.PotionEffectType nextEffect = availableEffects.get(currentEffectIndex + 1);
+                    session.setSelectedStatusEffectKey(StatusTransferSupport.effectKey(nextEffect));
+                    String label = StatusTransferSupport.displayName(nextEffect);
+                    debugLog(player, "cycleAspect: selected status %s (mode=%s, source=%s, total=%d)", label, family.displayName(), session.source().displayName(), availableEffects.size());
+                    sendActionBar(player, "\u00a7e\u00a7l" + family.icon() + " " + family.displayName() + " \u00a78| \u00a7b" + label + " \u00a78(" + (currentEffectIndex + 2) + "/" + availableEffects.size() + ")");
+                    player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_HARP, 0.4f, 0.8f + ((currentEffectIndex + 1) * 0.1f));
+                    return;
+                }
+            }
+        }
+
         GraftAspect next;
         if (current == null) {
             next = aspects.get(0);
@@ -307,9 +350,25 @@ public final class FocusInteractionListener implements Listener {
         }
 
         session.setSelectedAspect(next);
-        debugLog(player, "cycleAspect: selected %s (mode=%s, source=%s, total=%d)", next.displayName(), family.displayName(), session.source().displayName(), aspects.size());
-        sendActionBar(player, "\u00a7e\u00a7l" + family.icon() + " " + family.displayName() + " \u00a78| \u00a7b" + next.displayName() + " \u00a78(" + (aspects.indexOf(next) + 1) + "/" + aspects.size() + ")");
-        player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_HARP, 0.4f, 0.8f + (aspects.indexOf(next) * 0.1f));
+        if (next == GraftAspect.STATUS) {
+            session.setSelectedStatusEffectKey(StatusTransferSupport.effectKey(
+                StatusTransferSupport.resolveEffect(plugin, session.sourceReference(), null)
+            ));
+        }
+        String label = next == GraftAspect.STATUS
+            ? StatusTransferSupport.selectedLabel(plugin, session.sourceReference(), session.selectedStatusEffectKey())
+            : next.displayName();
+        int totalCount = next == GraftAspect.STATUS
+            ? Math.max(1, StatusTransferSupport.availableEffects(plugin, session.sourceReference()).size())
+            : aspects.size();
+        int position = next == GraftAspect.STATUS
+            ? Math.max(1, StatusTransferSupport.availableEffects(plugin, session.sourceReference()).indexOf(
+                StatusTransferSupport.resolveEffect(plugin, session.sourceReference(), session.selectedStatusEffectKey())
+            ) + 1)
+            : aspects.indexOf(next) + 1;
+        debugLog(player, "cycleAspect: selected %s (mode=%s, source=%s, total=%d)", label, family.displayName(), session.source().displayName(), totalCount);
+        sendActionBar(player, "\u00a7e\u00a7l" + family.icon() + " " + family.displayName() + " \u00a78| \u00a7b" + label + " \u00a78(" + position + "/" + totalCount + ")");
+        player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_HARP, 0.4f, 0.8f + (position * 0.1f));
     }
 
     private void selectSource(Player player, Block clickedBlock, Entity clickedEntity) {
@@ -391,8 +450,11 @@ public final class FocusInteractionListener implements Listener {
         String srcPrefix = isConcept ? "§3[Concept] §6" : (isSlot ? "§a[Inv] §6" : "§6");
         String slotHint = isSlot ? " §8- Left-Click chest or /graft target" : "";
         if (selectedAspect != null) {
-            String cycleHint = aspects.size() > 1 ? " §8(shift+RC cycle)" : "";
-            sendActionBar(player, "§eSource: " + srcPrefix + source.displayName() + " §8| " + family.icon() + " §b" + selectedAspect.displayName() + cycleHint + slotHint);
+            String cycleHint = aspects.size() > 1 || (selectedAspect == GraftAspect.STATUS && !StatusTransferSupport.availableEffects(plugin, reference).isEmpty()) ? " §8(shift+RC cycle)" : "";
+            String selectedLabel = selectedAspect == GraftAspect.STATUS
+                ? StatusTransferSupport.selectedLabel(plugin, reference, session.selectedStatusEffectKey())
+                : selectedAspect.displayName();
+            sendActionBar(player, "§eSource: " + srcPrefix + source.displayName() + " §8| " + family.icon() + " §b" + selectedLabel + cycleHint + slotHint);
         } else {
             sendActionBar(player, "§eSource: " + srcPrefix + source.displayName() + " §8| " + family.icon() + " " + family.displayName() + slotHint);
         }
@@ -417,15 +479,22 @@ public final class FocusInteractionListener implements Listener {
             family.displayName(), session.selectedAspect().displayName(), session.source().displayName(),
             clickedBlock, clickedEntity != null ? clickedEntity.getType() : "null");
 
+        boolean success = switch (family) {
+            case STATE -> applyStateTransfer(player, clickedBlock, clickedEntity);
+            case RELATION -> applyRelationGraft(player, clickedBlock, clickedEntity);
+            case TOPOLOGY -> applyTopologyGraft(player, clickedBlock, clickedEntity);
+            case SEQUENCE -> applySequenceTamper(player, clickedBlock, clickedEntity);
+        };
+        if (!success) {
+            return;
+        }
 
         Location castOrigin = player.getEyeLocation();
         try {
             player.getWorld().spawnParticle(Particle.FLASH, castOrigin, 1, 0, 0, 0, 0);
         } catch (IllegalArgumentException e) {
-
             player.getWorld().spawnParticle(Particle.END_ROD, castOrigin, 3, 0.2, 0.2, 0.2, 0.01);
         }
-
 
         Sound castSound = switch (family) {
             case STATE -> Sound.ENTITY_EVOKER_CAST_SPELL;
@@ -435,17 +504,9 @@ public final class FocusInteractionListener implements Listener {
         };
         player.playSound(player.getLocation(), castSound, 0.8f, 1.0f);
 
-
         Location castLoc = clickedEntity != null ? clickedEntity.getLocation() :
             (clickedBlock != null ? clickedBlock.getLocation().add(0.5, 0.5, 0.5) : player.getEyeLocation());
         spawnFamilyParticles(player, family, castLoc);
-
-        switch (family) {
-            case STATE -> applyStateTransfer(player, clickedBlock, clickedEntity);
-            case RELATION -> applyRelationGraft(player, clickedBlock, clickedEntity);
-            case TOPOLOGY -> applyTopologyGraft(player, clickedBlock, clickedEntity);
-            case SEQUENCE -> applySequenceTamper(player, clickedBlock, clickedEntity);
-        }
     }
 
     private void spawnFamilyParticles(Player player, GraftFamily family, Location loc) {
@@ -470,46 +531,45 @@ public final class FocusInteractionListener implements Listener {
         }
     }
 
-    private void applyStateTransfer(Player player, Block clickedBlock, Entity clickedEntity) {
+    private boolean applyStateTransfer(Player player, Block clickedBlock, Entity clickedEntity) {
         CastSession session = plugin.castSessionManager().session(player.getUniqueId());
         if (session.selectedTargetSlot() >= 0) {
-            plugin.stateTransferService().applyToInventorySlot(player, session.source(), session.selectedAspect(), session.selectedTargetSlot());
-            return;
+            return plugin.stateTransferService().applyToInventorySlot(player, session.source(), session.sourceReference(), session.selectedAspect(), session.selectedTargetSlot());
         }
         FocusTarget target = resolveStateTarget(player, clickedBlock, clickedEntity);
         if (target != null) {
-            applyStateTransferToTarget(player, session, target);
-            return;
+            return applyStateTransferToTarget(player, session, target);
         }
         if (canApplyToOffhandItem(player, session.selectedAspect())) {
-            plugin.stateTransferService().applyToOffhandItem(player, session.source(), session.selectedAspect());
-            sendActionBar(player, "\u00a78Tip: use \u00a7e/graft target\u00a78 to pick a specific slot instead of offhand.");
-            return;
+            boolean success = plugin.stateTransferService().applyToOffhandItem(player, session.source(), session.sourceReference(), session.selectedAspect());
+            if (success) {
+                sendActionBar(player, "\u00a78Tip: use \u00a7e/graft target\u00a78 to pick a specific slot instead of offhand.");
+            }
+            return success;
         }
-        plugin.stateTransferService().applyToArea(player, session.source(), session.selectedAspect(), player.getLocation());
+        return plugin.stateTransferService().applyToArea(player, session.source(), session.selectedAspect(), player.getLocation());
     }
 
-    private void applyStateTransferToTarget(Player player, CastSession session, FocusTarget target) {
+    private boolean applyStateTransferToTarget(Player player, CastSession session, FocusTarget target) {
+        if (rejectSamePhysicalSourceAndTarget(player, session, target.block(), target.entity())) {
+            return false;
+        }
         if (target.entity() instanceof Projectile projectile) {
-            plugin.stateTransferService().applyToProjectile(player, session.source(), session.selectedAspect(), projectile);
-            return;
+            return plugin.stateTransferService().applyToProjectile(player, session.source(), session.selectedAspect(), projectile);
         }
         if (target.entity() != null) {
-            plugin.stateTransferService().applyToEntity(player, session.source(), session.selectedAspect(), target.entity());
-            return;
+            return plugin.stateTransferService().applyToEntity(player, session.source(), session.sourceReference(), session.selectedAspect(), session.selectedStatusEffectKey(), target.entity());
         }
         if (plugin.subjectResolver().resolveFluid(target.block().getType()).isPresent()) {
-            plugin.stateTransferService().applyToFluid(player, session.source(), session.selectedAspect(), target.block());
-            return;
+            return plugin.stateTransferService().applyToFluid(player, session.source(), session.selectedAspect(), target.block());
         }
-        plugin.stateTransferService().applyToBlock(player, session.source(), session.selectedAspect(), target.block());
+        return plugin.stateTransferService().applyToBlock(player, session.source(), session.selectedAspect(), target.block());
     }
 
-    private void applyRelationGraft(Player player, Block clickedBlock, Entity clickedEntity) {
+    private boolean applyRelationGraft(Player player, Block clickedBlock, Entity clickedEntity) {
         CastSession session = plugin.castSessionManager().session(player.getUniqueId());
         if (session.sourceReference().hasInventorySlot() && session.selectedTargetSlot() >= 0) {
-            plugin.relationGraftService().applySlotToSlot(player, session.source(), session.sourceReference().inventorySlot(), session.selectedAspect(), session.selectedTargetSlot());
-            return;
+            return plugin.relationGraftService().applySlotToSlot(player, session.source(), session.sourceReference().inventorySlot(), session.selectedAspect(), session.selectedTargetSlot());
         }
         FocusTarget target = resolveExplicitOrLookTarget(player, clickedBlock, clickedEntity);
         if (target == null) {
@@ -518,47 +578,56 @@ public final class FocusInteractionListener implements Listener {
             } else {
                 plugin.messages().send(player, "no-target-found");
             }
-            return;
+            return false;
+        }
+        if (rejectSamePhysicalSourceAndTarget(player, session, target.block(), target.entity())) {
+            return false;
         }
         if (target.entity() != null) {
-            plugin.relationGraftService().applyToEntity(player, session.source(), session.sourceReference(), session.selectedAspect(), target.entity());
-            return;
+            return plugin.relationGraftService().applyToEntity(player, session.source(), session.sourceReference(), session.selectedAspect(), target.entity());
         }
-        plugin.relationGraftService().applyToBlock(player, session.source(), session.sourceReference(), session.selectedAspect(), target.block());
+        return plugin.relationGraftService().applyToBlock(player, session.source(), session.sourceReference(), session.selectedAspect(), target.block());
     }
 
-    private void applyTopologyGraft(Player player, Block clickedBlock, Entity clickedEntity) {
+    private boolean applyTopologyGraft(Player player, Block clickedBlock, Entity clickedEntity) {
         CastSession session = plugin.castSessionManager().session(player.getUniqueId());
         FocusTarget target = resolveExplicitOrLookTarget(player, clickedBlock, clickedEntity);
         if (target == null) {
             plugin.messages().send(player, "no-target-found");
-            return;
+            return false;
+        }
+        if (rejectSamePhysicalSourceAndTarget(player, session, target.block(), target.entity())) {
+            return false;
         }
         if (target.entity() != null) {
-            plugin.topologyGraftService().applyToLocation(player, session.source(), session.sourceReference(), session.selectedAspect(), target.entity().getLocation().add(0.0D, target.entity().getHeight() * 0.5D, 0.0D));
-            return;
+            return plugin.topologyGraftService().applyToLocation(player, session.source(), session.sourceReference(), session.selectedAspect(), target.entity().getLocation().add(0.0D, target.entity().getHeight() * 0.5D, 0.0D));
         }
-        plugin.topologyGraftService().applyToBlock(player, session.source(), session.sourceReference(), session.selectedAspect(), target.block());
+        return plugin.topologyGraftService().applyToBlock(player, session.source(), session.sourceReference(), session.selectedAspect(), target.block());
     }
 
-    private void applySequenceTamper(Player player, Block clickedBlock, Entity clickedEntity) {
+    private boolean applySequenceTamper(Player player, Block clickedBlock, Entity clickedEntity) {
         CastSession session = plugin.castSessionManager().session(player.getUniqueId());
         if (session.selectedAspect() == GraftAspect.ON_HIT) {
             Projectile projectileTarget = resolveProjectileCastTarget(player, clickedBlock, clickedEntity);
             if (projectileTarget == null) {
                 plugin.messages().send(player, "no-target-found");
-                return;
+                return false;
             }
-            plugin.sequenceTamperService().applyToProjectile(player, session.source(), session.sourceReference(), session.selectedAspect(), projectileTarget);
-            return;
+            if (rejectSamePhysicalSourceAndTarget(player, session, null, projectileTarget)) {
+                return false;
+            }
+            return plugin.sequenceTamperService().applyToProjectile(player, session.source(), session.sourceReference(), session.selectedAspect(), projectileTarget);
         }
 
         Block blockTarget = resolveSequenceBlockTarget(player, clickedBlock);
         if (blockTarget == null) {
             plugin.messages().send(player, "no-target-found");
-            return;
+            return false;
         }
-        plugin.sequenceTamperService().applyToBlock(player, session.source(), session.sourceReference(), session.selectedAspect(), blockTarget);
+        if (rejectSamePhysicalSourceAndTarget(player, session, blockTarget, null)) {
+            return false;
+        }
+        return plugin.sequenceTamperService().applyToBlock(player, session.source(), session.sourceReference(), session.selectedAspect(), blockTarget);
     }
 
 
@@ -755,6 +824,38 @@ public final class FocusInteractionListener implements Listener {
 
         Block targetBlock = player.getTargetBlockExact(plugin.settings().interactionRange(), FluidCollisionMode.ALWAYS);
         return focusTargetForBlock(targetBlock);
+    }
+
+    private boolean rejectSamePhysicalSourceAndTarget(Player player, CastSession session, Block targetBlock, Entity targetEntity) {
+        CastSourceReference sourceReference = session.sourceReference();
+        if (sourceReference == null) {
+            return false;
+        }
+        if (sourceReference.hasEntity() && targetEntity != null && sourceReference.entityId().equals(targetEntity.getUniqueId())) {
+            player.sendMessage("§cSource and target cannot be the same entity.");
+            sendActionBar(player, "§cPick something else as the target");
+            player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 0.5f, 0.5f);
+            return true;
+        }
+        if (sourceReference.hasBlockLocation() && targetBlock != null) {
+            Location sourceBlock = sourceReference.blockLocation();
+            if (sourceBlock != null && sameBlock(sourceBlock, targetBlock.getLocation())) {
+                player.sendMessage("§cSource and target cannot be the same block.");
+                sendActionBar(player, "§cPick a different block as the target");
+                player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 0.5f, 0.5f);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean sameBlock(Location first, Location second) {
+        if (first == null || second == null || first.getWorld() == null || !first.getWorld().equals(second.getWorld())) {
+            return false;
+        }
+        return first.getBlockX() == second.getBlockX()
+            && first.getBlockY() == second.getBlockY()
+            && first.getBlockZ() == second.getBlockZ();
     }
 
     private void sendActionBar(Player player, String text) {

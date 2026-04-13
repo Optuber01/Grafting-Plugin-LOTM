@@ -9,6 +9,7 @@ public final class CastSession {
     private GraftSubject source;
     private CastSourceReference sourceReference = CastSourceReference.none();
     private GraftAspect selectedAspect;
+    private String selectedStatusEffectKey;
     private int selectedTargetSlot = -1;
 
     public GraftFamily family() {
@@ -31,6 +32,7 @@ public final class CastSession {
         this.source = source;
         this.sourceReference = sourceReference;
         this.selectedAspect = null;
+        this.selectedStatusEffectKey = null;
     }
 
     public CastSourceReference sourceReference() {
@@ -43,10 +45,22 @@ public final class CastSession {
 
     public void setSelectedAspect(GraftAspect selectedAspect) {
         this.selectedAspect = selectedAspect;
+        if (selectedAspect != GraftAspect.STATUS) {
+            this.selectedStatusEffectKey = null;
+        }
+    }
+
+    public String selectedStatusEffectKey() {
+        return selectedStatusEffectKey;
+    }
+
+    public void setSelectedStatusEffectKey(String selectedStatusEffectKey) {
+        this.selectedStatusEffectKey = selectedStatusEffectKey;
     }
 
     public void clearAspectSelection() {
         this.selectedAspect = null;
+        this.selectedStatusEffectKey = null;
     }
 
     public int selectedTargetSlot() {
@@ -65,6 +79,7 @@ public final class CastSession {
         this.source = null;
         this.sourceReference = CastSourceReference.none();
         this.selectedAspect = null;
+        this.selectedStatusEffectKey = null;
         this.selectedTargetSlot = -1;
     }
 }

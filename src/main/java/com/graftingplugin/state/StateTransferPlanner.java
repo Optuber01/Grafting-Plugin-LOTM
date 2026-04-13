@@ -53,7 +53,7 @@ public final class StateTransferPlanner {
 
     private Optional<StateTransferPlan> planEntity(GraftAspect aspect, SubjectKind kind) {
         return switch (aspect) {
-            case LIGHT, GLOW, SPEED, SLOW, STICKY, POISON, HEAL, CONCEAL, FREEZE, HEAVY -> Optional.of(new StateTransferPlan(aspect, kind, StateTransferMode.ENTITY_EFFECT, "Apply a temporary state effect to the entity."));
+            case LIGHT, GLOW, SPEED, SLOW, STICKY, POISON, HEAL, STATUS, CONCEAL, FREEZE, HEAVY -> Optional.of(new StateTransferPlan(aspect, kind, StateTransferMode.ENTITY_EFFECT, "Apply a temporary state effect to the entity."));
             case IGNITE, HEAT -> Optional.of(new StateTransferPlan(aspect, kind, StateTransferMode.ENTITY_FIRE, "Apply direct heat or ignition to the entity."));
             case BOUNCE -> Optional.of(new StateTransferPlan(aspect, kind, StateTransferMode.ENTITY_BOUNCE, "Grant temporary bounce behavior to the entity."));
             default -> Optional.empty();

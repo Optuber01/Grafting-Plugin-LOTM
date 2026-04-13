@@ -264,8 +264,8 @@ public final class RelationGraftService implements Listener {
             "target", target.displayName()
         ));
         caster.sendMessage("\u00a77" + describeRelationOutcome(plan));
+        caster.sendMessage("§8Your graft setup remains armed. Use §e/graft clear§8 when you want to reset it.");
         caster.playSound(caster.getLocation(), Sound.ENTITY_BLAZE_SHOOT, 0.7f, 1.2f);
-        plugin.castSessionManager().session(caster.getUniqueId()).clearSelection();
     }
 
     private RelationGraftPlan validateAndPlan(Player caster, GraftSubject source, GraftAspect aspect, GraftSubject target) {
@@ -679,8 +679,8 @@ public final class RelationGraftService implements Listener {
             "aspect", aspect.displayName(),
             "source", source.displayName()
         ));
+        caster.sendMessage("§8Your graft setup remains armed. Use §e/graft clear§8 when you want to reset it.");
         caster.playSound(caster.getLocation(), Sound.ENTITY_ITEM_PICKUP, 0.8f, 1.2f);
-        plugin.castSessionManager().session(caster.getUniqueId()).clearSelection();
         return true;
     }
 

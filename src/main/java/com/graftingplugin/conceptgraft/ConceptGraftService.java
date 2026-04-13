@@ -28,6 +28,7 @@ import org.bukkit.event.entity.EntityChangeBlockEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityTargetLivingEntityEvent;
 import org.bukkit.event.inventory.InventoryOpenEvent;
+import org.bukkit.event.player.PlayerBucketEmptyEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.potion.PotionEffect;
@@ -122,6 +123,7 @@ public final class ConceptGraftService implements Listener {
             "graft", type.displayName(),
             "seconds", Integer.toString(durationTicks / 20)
         ));
+        sendConceptualSummary(caster, type, durationTicks / 20);
         sendActionBar(caster, "§5" + type.displayName() + " §8| §dlaw imposed over " + formatRadius(radius) + "m");
         return true;
     }
@@ -178,6 +180,25 @@ public final class ConceptGraftService implements Listener {
             && placed.getType() != Material.BLUE_ICE && placed.getType() != Material.PACKED_ICE) {
             return;
         }
+        Location loc = placed.getLocation();
+        for (ActiveConceptZone zone : activeZones.values()) {
+            if (zone.type() == ConceptGraftType.NETHER_ZONE && isInZone(loc, zone)) {
+                event.setCancelled(true);
+                placed.getWorld().spawnParticle(Particle.SMOKE, loc.clone().add(0.5, 0.5, 0.5), 8, 0.3, 0.3, 0.3, 0.02);
+                placed.getWorld().playSound(loc, Sound.BLOCK_FIRE_EXTINGUISH, 0.5f, 1.5f);
+                plugin.messages().send(event.getPlayer(), "conceptual-nether-water-rejected");
+                sendActionBar(event.getPlayer(), "§cNether law rejects water here");
+                return;
+            }
+        }
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onBucketEmpty(PlayerBucketEmptyEvent event) {
+        if (event.getBucket() != Material.WATER_BUCKET) {
+            return;
+        }
+        Block placed = event.getBlock().getRelative(event.getBlockFace());
         Location loc = placed.getLocation();
         for (ActiveConceptZone zone : activeZones.values()) {
             if (zone.type() == ConceptGraftType.NETHER_ZONE && isInZone(loc, zone)) {
@@ -284,6 +305,7 @@ public final class ConceptGraftService implements Listener {
         plugin.messages().send(caster, "conceptual-loop-activated", Map.of(
             "seconds", Integer.toString(durationTicks / 20)
         ));
+        sendConceptualSummary(caster, type, durationTicks / 20);
         sendActionBar(caster, "§5Beginning and end identified as one path");
         return true;
     }
@@ -291,12 +313,20 @@ public final class ConceptGraftService implements Listener {
     private boolean activateThresholdRelay(Player caster, ConceptGraftType type, Location sourceAnchor, Location destinationAnchor) {
         Block sourceBlock = sourceAnchor.getBlock();
         Block destinationBlock = destinationAnchor.getBlock();
-        if (!(sourceBlock.getState() instanceof Container) || !(destinationBlock.getState() instanceof Container)) {
+        if (sourceBlock.getType() == Material.ENDER_CHEST || destinationBlock.getType() == Material.ENDER_CHEST) {
+            caster.sendMessage("§cThreshold → Elsewhere does not support ender chests yet.");
+            return false;
+        }
+        if (!(sourceBlock.getState() instanceof Container sourceContainer) || !(destinationBlock.getState() instanceof Container destinationContainer)) {
             caster.sendMessage("§cThreshold → Elsewhere requires two container anchors.");
             return false;
         }
         if (sameBlock(sourceAnchor, destinationAnchor)) {
             caster.sendMessage("§cChoose two different container anchors.");
+            return false;
+        }
+        if (sourceContainer.getInventory().equals(destinationContainer.getInventory())) {
+            caster.sendMessage("§cChoose two different inventories, not two faces of the same storage.");
             return false;
         }
         if (!canActivate(caster)) {
@@ -332,6 +362,8 @@ public final class ConceptGraftService implements Listener {
         plugin.messages().send(caster, "conceptual-threshold-activated", Map.of(
             "seconds", Integer.toString(durationTicks / 20)
         ));
+        sendConceptualSummary(caster, type, durationTicks / 20);
+        caster.sendMessage("§8Items you place during the rewrite remain in the destination inventory when it expires.");
         sendActionBar(caster, "§5This threshold now opens elsewhere");
         return true;
     }
@@ -467,7 +499,7 @@ public final class ConceptGraftService implements Listener {
         World world = zone.center().getWorld();
         double radius = zone.radius();
 
-        world.spawnParticle(Particle.DRAGON_BREATH, zone.center(), 6, radius * 0.3, 0.5, radius * 0.3, 0.005);
+        world.spawnParticle(Particle.REVERSE_PORTAL, zone.center(), 6, radius * 0.3, 0.5, radius * 0.3, 0.005);
         world.spawnParticle(Particle.PORTAL, zone.center(), 12, radius * 0.3, 1.0, radius * 0.3, 0.3);
         world.spawnParticle(Particle.REVERSE_PORTAL, zone.center().clone().add(0, 1, 0), 6, radius * 0.2, 0.5, radius * 0.2, 0.1);
 
@@ -869,7 +901,7 @@ public final class ConceptGraftService implements Listener {
                 world.playSound(center, Sound.AMBIENT_NETHER_WASTES_MOOD, 0.7f, 1.0f);
             }
             case END_ZONE -> {
-                world.spawnParticle(Particle.DRAGON_BREATH, center, 40, 2.0, 1.0, 2.0, 0.01);
+                world.spawnParticle(Particle.REVERSE_PORTAL, center, 40, 2.0, 1.0, 2.0, 0.01);
                 world.spawnParticle(Particle.PORTAL, center, 60, 2.0, 2.0, 2.0, 0.5);
                 world.playSound(center, Sound.BLOCK_BEACON_ACTIVATE, 0.8f, 0.4f);
                 world.playSound(center, Sound.ENTITY_ENDER_DRAGON_AMBIENT, 0.3f, 1.5f);
@@ -938,6 +970,7 @@ public final class ConceptGraftService implements Listener {
                 if (exitedZone == null) {
                     continue;
                 }
+                handleZoneExitVisualReset(player, exitedZone, currentZones);
                 sendThrottledActionBar(player, "zone-exit-" + zoneId, presentation.exitActionBarFor(exitedZone.type()), 800L);
             }
             if (currentZones.isEmpty()) {
@@ -946,6 +979,37 @@ public final class ConceptGraftService implements Listener {
                 playerZonePresence.put(player.getUniqueId(), currentZones);
             }
         }
+    }
+
+    private void sendConceptualSummary(Player player, ConceptGraftType type, int seconds) {
+        player.sendMessage("§8" + switch (type) {
+            case SUN_TO_GROUND -> "Solar law holds for " + seconds + "s: daylight dominates, frost fails, undead burn, crops surge.";
+            case SKY_TO_GROUND -> "Sky law holds for " + seconds + "s: falling is denied and unsupported descent is suppressed.";
+            case NETHER_ZONE -> "Nether law holds for " + seconds + "s: water is rejected and heat shelters instead of harms.";
+            case END_ZONE -> "End law holds for " + seconds + "s: positions become unstable and may shift without warning.";
+            case OVERWORLD_ZONE -> "Overworld law holds for " + seconds + "s: foreign laws are stripped and natural order is restored.";
+            case CONCEALMENT_TO_RECOGNITION -> "Recognition is rewritten for " + seconds + "s: hostile attention loses players inside the zone.";
+            case BEGINNING_TO_END -> "For " + seconds + "s, the two anchors are treated as one route: what enters one may finish at the other.";
+            case THRESHOLD_TO_ELSEWHERE -> "For " + seconds + "s, opening the source threshold reveals the destination inventory elsewhere.";
+        });
+    }
+
+    private void handleZoneExitVisualReset(Player player, ActiveConceptZone exitedZone, Set<UUID> currentZones) {
+        if (!affectsPlayerSky(exitedZone.type())) {
+            return;
+        }
+        boolean stillInsideSkyAffectingZone = currentZones.stream()
+            .map(activeZones::get)
+            .anyMatch(zone -> zone != null && affectsPlayerSky(zone.type()));
+        if (stillInsideSkyAffectingZone) {
+            return;
+        }
+        player.resetPlayerTime();
+        player.resetPlayerWeather();
+    }
+
+    private boolean affectsPlayerSky(ConceptGraftType type) {
+        return type == ConceptGraftType.SUN_TO_GROUND || type == ConceptGraftType.SKY_TO_GROUND;
     }
 
     private void renderZoneBoundary(World world, Location center, double radius, Particle particle, int points) {

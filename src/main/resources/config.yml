@@ -2,6 +2,7 @@ focus:
   material: BLAZE_ROD
   name: <light_purple>Mystic Focus</light_purple>
   interaction-range: 8
+  debug-enabled-by-default: true
 state-transfer:
   effect-duration-seconds: 20
   field-duration-seconds: 12

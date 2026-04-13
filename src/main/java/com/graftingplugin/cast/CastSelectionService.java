@@ -3,6 +3,7 @@ package com.graftingplugin.cast;
 import com.graftingplugin.GraftingPlugin;
 import com.graftingplugin.aspect.DynamicProperty;
 import com.graftingplugin.aspect.GraftAspect;
+import com.graftingplugin.state.StatusTransferSupport;
 import com.graftingplugin.subject.GraftSubject;
 import com.graftingplugin.validation.GraftCompatibilityResult;
 import org.bukkit.entity.Player;
@@ -39,9 +40,10 @@ public final class CastSelectionService {
         session.setSource(source, sourceReference);
         GraftAspect selectedAspect = compatibleAspects.getFirst();
         session.setSelectedAspect(selectedAspect);
+        initializeStatusSelection(session);
         plugin.messages().send(player, "source-armed-single", Map.of(
             "source", source.displayName(),
-            "aspect", selectedAspect.displayName()
+            "aspect", selectedAspectLabel(session)
         ));
         if (compatibleAspects.size() > 1) {
             player.sendMessage("§7Available " + family.displayName() + " aspects: §b" + formatAspectList(compatibleAspects) + " §8(Shift+Right-Click or /graft next)");
@@ -78,8 +80,25 @@ public final class CastSelectionService {
         }
 
         session.setSelectedAspect(aspect);
-        plugin.messages().send(player, "aspect-selected", "aspect", aspect.displayName());
+        initializeStatusSelection(session);
+        plugin.messages().send(player, "aspect-selected", "aspect", selectedAspectLabel(session));
         return true;
+    }
+
+    private void initializeStatusSelection(CastSession session) {
+        if (session.selectedAspect() != GraftAspect.STATUS) {
+            return;
+        }
+        session.setSelectedStatusEffectKey(StatusTransferSupport.effectKey(
+            StatusTransferSupport.resolveEffect(plugin, session.sourceReference(), session.selectedStatusEffectKey())
+        ));
+    }
+
+    private String selectedAspectLabel(CastSession session) {
+        if (session.selectedAspect() != GraftAspect.STATUS) {
+            return session.selectedAspect().displayName();
+        }
+        return StatusTransferSupport.selectedLabel(plugin, session.sourceReference(), session.selectedStatusEffectKey());
     }
 
     private String formatAspectList(List<GraftAspect> aspects) {

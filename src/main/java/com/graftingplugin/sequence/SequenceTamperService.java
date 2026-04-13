@@ -135,8 +135,8 @@ public final class SequenceTamperService implements Listener {
             "target", target.displayName()
         ));
         caster.sendMessage("§7Payload armed for " + formatSeconds(Math.max(1, (int) Math.round(plugin.settings().sequenceTamperSettings().payloadDurationTicks() * plan.modifier().durationMultiplier()))) + ": " + formatAspects(transferablePayloadAspects(source)) + ".");
+        caster.sendMessage("§8Your graft setup remains armed. Use §e/graft clear§8 when you want to reset it.");
         caster.playSound(caster.getLocation(), Sound.BLOCK_DISPENSER_LAUNCH, 0.7f, 1.0f);
-        plugin.castSessionManager().session(caster.getUniqueId()).clearSelection();
     }
 
     private void finishRelayCast(Player caster, GraftAspect aspect, GraftSubject target, SequenceTamperPlan plan) {
@@ -145,8 +145,8 @@ public final class SequenceTamperService implements Listener {
             "target", target.displayName()
         ));
         caster.sendMessage("§7Open relay active for " + formatSeconds(Math.max(1, (int) Math.round(plugin.settings().sequenceTamperSettings().openRelayDurationTicks() * plan.modifier().durationMultiplier()))) + ".");
+        caster.sendMessage("§8Your graft setup remains armed. Use §e/graft clear§8 when you want to reset it.");
         caster.playSound(caster.getLocation(), Sound.BLOCK_DISPENSER_LAUNCH, 0.7f, 1.0f);
-        plugin.castSessionManager().session(caster.getUniqueId()).clearSelection();
     }
 
     @EventHandler(ignoreCancelled = true)
@@ -483,24 +483,24 @@ public final class SequenceTamperService implements Listener {
         BlockData updated = original.clone();
         boolean changed = false;
         if (updated instanceof Openable openable) {
-            openable.setOpen(true);
+            openable.setOpen(!openable.isOpen());
             changed = true;
         }
         if (updated instanceof Powerable powerable) {
-            powerable.setPowered(true);
+            powerable.setPowered(!powerable.isPowered());
             changed = true;
         }
         if (!changed) {
             return;
         }
-        sourceBlock.setBlockData(updated, false);
+        sourceBlock.setBlockData(updated, true);
         BukkitTask[] taskHolder = new BukkitTask[1];
         taskHolder[0] = plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
             try {
                 if (sourceBlockLocation.getWorld() == null) {
                     return;
                 }
-                sourceBlockLocation.getBlock().setBlockData(original, false);
+                sourceBlockLocation.getBlock().setBlockData(original, true);
             } finally {
                 activeTasks.remove(taskHolder[0]);
             }

@@ -104,6 +104,10 @@ public final class AspectCatalog {
             aspects.add(GraftAspect.GLOW);
         }
         if (entity instanceof LivingEntity livingEntity) {
+            aspects.add(GraftAspect.HEAL);
+            if (!livingEntity.getActivePotionEffects().isEmpty()) {
+                aspects.add(GraftAspect.STATUS);
+            }
             addLivingEffectAspects(aspects, livingEntity);
         }
         switch (entity.getType()) {
