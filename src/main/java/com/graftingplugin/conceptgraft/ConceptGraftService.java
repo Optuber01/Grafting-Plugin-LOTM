@@ -24,6 +24,7 @@ import org.bukkit.entity.Monster;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.block.BlockFromToEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityChangeBlockEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
@@ -249,6 +250,24 @@ public final class ConceptGraftService implements Listener {
                 return;
             }
         }
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onBlockFromTo(BlockFromToEvent event) {
+        if (event.getBlock().getType() != Material.WATER) {
+            return;
+        }
+        ActiveConceptZone zone = overworldZoneAt(event.getBlock().getLocation());
+        if (zone == null) {
+            return;
+        }
+        Location targetLocation = event.getToBlock().getLocation();
+        if (!isInZone(targetLocation, zone)) {
+            event.setCancelled(true);
+            event.getBlock().getWorld().spawnParticle(Particle.SMOKE, targetLocation.clone().add(0.5, 0.5, 0.5), 4, 0.15, 0.15, 0.15, 0.01);
+            return;
+        }
+        overworldWaterByZone.computeIfAbsent(zone.id(), ignored -> ConcurrentHashMap.newKeySet()).add(targetLocation.toBlockLocation());
     }
 
     @EventHandler(ignoreCancelled = true)
@@ -567,14 +586,14 @@ public final class ConceptGraftService implements Listener {
         Location waterLocation = placed.getLocation().toBlockLocation();
         overworldWaterByZone.computeIfAbsent(zone.id(), ignored -> ConcurrentHashMap.newKeySet()).add(waterLocation);
         plugin.getServer().getScheduler().runTask(plugin, () -> {
-            if (!player.isOnline() || waterLocation.getWorld() == null) {
+            if (!player.isOnline() || waterLocation.getWorld() == null || !isInZone(waterLocation, zone)) {
                 return;
             }
             Block targetBlock = waterLocation.getBlock();
             if (!targetBlock.getType().isAir() && targetBlock.getType() != Material.FIRE) {
                 return;
             }
-            targetBlock.setType(Material.WATER, false);
+            targetBlock.setType(Material.WATER, true);
             targetBlock.getWorld().spawnParticle(Particle.HAPPY_VILLAGER, targetBlock.getLocation().add(0.5, 0.5, 0.5), 8, 0.2, 0.2, 0.2, 0.01);
             targetBlock.getWorld().playSound(targetBlock.getLocation(), Sound.ITEM_BUCKET_EMPTY, 0.7f, 1.2f);
             if (player.getGameMode() != GameMode.CREATIVE) {
@@ -621,8 +640,8 @@ public final class ConceptGraftService implements Listener {
                 continue;
             }
             Block block = location.getBlock();
-            if (block.getType().isAir() || block.getType() == Material.FIRE) {
-                block.setType(Material.WATER, false);
+            if (block.getType() != Material.WATER) {
+                trackedWater.remove(location);
             }
         }
         if (trackedWater.isEmpty()) {
@@ -946,6 +965,15 @@ public final class ConceptGraftService implements Listener {
             return null;
         }
         return container.getInventory();
+    }
+
+    private ActiveConceptZone overworldZoneAt(Location location) {
+        for (ActiveConceptZone zone : activeZones.values()) {
+            if (zone.type() == ConceptGraftType.OVERWORLD_ZONE && isInZone(location, zone)) {
+                return zone;
+            }
+        }
+        return null;
     }
 
     private boolean isInZone(Location location, ActiveConceptZone zone) {
