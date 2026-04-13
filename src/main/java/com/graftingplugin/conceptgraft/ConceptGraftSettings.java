@@ -9,7 +9,7 @@ public record ConceptGraftSettings(
     int cooldownTicks,
     int loopDurationTicks,
     double loopActivationRadius,
-    int loopCooldownTicks,
+    int loopTeleportCooldownTicks,
     int maxActivePerPlayer
 ) {
 
@@ -20,7 +20,10 @@ public record ConceptGraftSettings(
         int cooldownSeconds = Math.max(1, config.getInt("conceptual-graft.cooldown-seconds", 30));
         int loopDurationSeconds = Math.max(5, config.getInt("conceptual-graft.loop-duration-seconds", 60));
         double loopActivationRadius = Math.max(0.5, config.getDouble("conceptual-graft.loop-activation-radius", 1.5));
-        int loopCooldownTicks = Math.max(5, config.getInt("conceptual-graft.loop-cooldown-ticks", 30));
+        int loopTeleportCooldownTicks = Math.max(5, config.getInt(
+            "conceptual-graft.loop-teleport-cooldown-ticks",
+            config.getInt("conceptual-graft.loop-cooldown-ticks", 30)
+        ));
         int maxActive = Math.max(1, config.getInt("conceptual-graft.max-active-per-player", 1));
         return new ConceptGraftSettings(
             zoneDurationSeconds * 20,
@@ -29,7 +32,7 @@ public record ConceptGraftSettings(
             cooldownSeconds * 20,
             loopDurationSeconds * 20,
             loopActivationRadius,
-            loopCooldownTicks,
+            loopTeleportCooldownTicks,
             maxActive
         );
     }

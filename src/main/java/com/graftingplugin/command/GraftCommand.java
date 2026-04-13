@@ -122,8 +122,10 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
             }
             case 3 -> {
                 sender.sendMessage(section("Conceptual Grafting"));
-                sender.sendMessage(commandLine("/graft concept", "Open the conceptual graft menu."));
-                sender.sendMessage(text("Conceptual grafts are rare, temporary, localized effects separate from practical mode/source/aspect setup.", NamedTextColor.GRAY));
+                sender.sendMessage(commandLine("/graft concept", "Open the rare conceptual graft menu."));
+                sender.sendMessage(commandLine("/graft concept list", "Open practical concept sources for normal grafting."));
+                sender.sendMessage(commandLine("/graft concept <name>", "Arm one practical concept source directly."));
+                sender.sendMessage(text("Bare /graft concept is for rare conceptual grafts. /graft concept list is for practical concept sources.", NamedTextColor.GRAY));
                 sender.sendMessage(text("Beginning ↔ End and Threshold → Elsewhere are anchor-based; the other conceptual grafts are zone laws.", NamedTextColor.GRAY));
                 sender.sendMessage(Component.empty());
                 sender.sendMessage(section("Runtime & Cleanup"));
@@ -172,11 +174,12 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
         }
         if (args.length < 2) {
             plugin.conceptCatalogGui().openConceptualGraftMenu(player);
+            plugin.messages().send(player, "conceptual-menu-opened");
             return;
         }
         if (args[1].equalsIgnoreCase("list")) {
             plugin.conceptCatalogGui().open(player);
-            player.sendMessage("\u00a77Pick a concept source or use \u00a7e/graft concept <name>\u00a77 directly.");
+            plugin.messages().send(player, "practical-concept-catalog-opened");
             return;
         }
         GraftSubject source = plugin.subjectResolver().resolveConcept(args[1]).orElse(null);
@@ -459,7 +462,7 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
         sender.sendMessage("/graft help|mode|concept|inventory|inv|target|aspect|next|cycle|self|inspect|clear|active|debug");
         sender.sendMessage("/graft status|clearactive|givefocus|reload");
         sender.sendMessage("\u00a77Modes: \u00a7estate \u00a77| \u00a7elink \u00a77| \u00a7elocation \u00a77| \u00a7eevent");
-        sender.sendMessage("\u00a77Concepts: \u00a7e/graft concept\u00a77 for conceptual grafts, \u00a7e/graft concept list\u00a77 for practical concept sources.");
+        sender.sendMessage("\u00a77Concepts: \u00a7e/graft concept\u00a77 = conceptual graft menu, \u00a7e/graft concept list\u00a77 = practical concept sources, \u00a7e/graft concept <name>\u00a77 = arm one directly.");
     }
 
     private Player requirePlayer(CommandSender sender) {

@@ -50,7 +50,7 @@ public final class ConceptCatalogGui implements Listener {
         }
 
         Inventory inventory = Bukkit.createInventory(new ConceptualGraftHolder(), size,
-            Component.text("\u2726 Conceptual Grafting \u2726", NamedTextColor.DARK_PURPLE, TextDecoration.BOLD));
+            Component.text("✦ Conceptual Graft Menu ✦", NamedTextColor.DARK_PURPLE, TextDecoration.BOLD));
 
         int slot = 0;
         for (ConceptGraftDefinition graft : grafts) {
@@ -87,7 +87,7 @@ public final class ConceptCatalogGui implements Listener {
             size = 9;
         }
 
-        Inventory inventory = Bukkit.createInventory(new ConceptHolder(), size, Component.text("Concept Catalog", NamedTextColor.DARK_PURPLE, TextDecoration.BOLD));
+        Inventory inventory = Bukkit.createInventory(new ConceptHolder(), size, Component.text("Practical Concept Sources", NamedTextColor.DARK_PURPLE, TextDecoration.BOLD));
 
         int slot = 0;
         for (ConceptDefinition concept : concepts) {
@@ -186,24 +186,24 @@ public final class ConceptCatalogGui implements Listener {
 
         if (!selectedType.requiresTwoAnchors()) {
             pendingActions.put(player.getUniqueId(), new PendingConceptAction(selectedType, null));
-            player.sendMessage("\u00a75\u00a7l\u2726 " + selectedType.displayName() + " law selected.");
-            player.sendMessage("\u00a75  Left-Click a block or the ground to impose that law on the zone.");
-            player.sendMessage("\u00a78  Shift+Left-Click air to cancel.");
+            plugin.messages().send(player, "conceptual-zone-armed", "graft", selectedType.displayName());
+            plugin.messages().send(player, "conceptual-zone-armed-hint");
+            plugin.messages().send(player, "conceptual-cancel-hint");
             return;
         }
 
         if (selectedType.firstAnchorComesFromCaster()) {
             pendingActions.put(player.getUniqueId(), new PendingConceptAction(selectedType, player.getLocation().clone()));
-            player.sendMessage("\u00a75\u00a7l\u2726 First anchor fixed at your position.");
-            player.sendMessage("\u00a75  Left-Click a second anchor to identify both locations as one place.");
-            player.sendMessage("\u00a78  Shift+Left-Click air to cancel.");
+            plugin.messages().send(player, "conceptual-anchor-armed");
+            plugin.messages().send(player, "conceptual-anchor-armed-hint");
+            plugin.messages().send(player, "conceptual-cancel-hint");
             return;
         }
 
         pendingActions.put(player.getUniqueId(), new PendingConceptAction(selectedType, null));
-        player.sendMessage("\u00a75\u00a7l\u2726 " + selectedType.displayName() + " rewrite selected.");
-        player.sendMessage("\u00a75  Left-Click the source container, then Left-Click the destination container.");
-        player.sendMessage("\u00a78  Shift+Left-Click air to cancel.");
+        plugin.messages().send(player, "conceptual-threshold-armed", "graft", selectedType.displayName());
+        plugin.messages().send(player, "conceptual-threshold-armed-hint");
+        plugin.messages().send(player, "conceptual-cancel-hint");
     }
 
     private ItemStack createGraftIcon(ConceptGraftDefinition graft) {
@@ -213,14 +213,17 @@ public final class ConceptCatalogGui implements Listener {
             meta.displayName(Component.text("\u2726 " + shortGraftName(graft.type()), NamedTextColor.DARK_PURPLE, TextDecoration.BOLD)
                 .decoration(TextDecoration.ITALIC, false));
             List<Component> lore = new ArrayList<>();
+            lore.add(Component.text("Rare conceptual graft", NamedTextColor.LIGHT_PURPLE).decoration(TextDecoration.ITALIC, false));
             lore.add(Component.empty());
             for (String line : wrapLore(graft.description(), 34)) {
                 lore.add(Component.text(line, NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false));
             }
             lore.add(Component.empty());
+            lore.add(Component.text("Signature concept: " + requiredConceptName(graft.requiredConceptKey()), NamedTextColor.AQUA).decoration(TextDecoration.ITALIC, false));
+            lore.add(Component.empty());
             if (!graft.type().requiresTwoAnchors()) {
                 lore.add(Component.text("Zone law", NamedTextColor.GOLD).decoration(TextDecoration.ITALIC, false));
-                lore.add(Component.text("Left-Click a center point", NamedTextColor.DARK_GRAY).decoration(TextDecoration.ITALIC, false));
+                lore.add(Component.text("Left-click a center point", NamedTextColor.DARK_GRAY).decoration(TextDecoration.ITALIC, false));
             } else if (graft.type().firstAnchorComesFromCaster()) {
                 lore.add(Component.text("Two-anchor identity", NamedTextColor.GOLD).decoration(TextDecoration.ITALIC, false));
                 lore.add(Component.text("First anchor = your position", NamedTextColor.DARK_GRAY).decoration(TextDecoration.ITALIC, false));
@@ -245,6 +248,8 @@ public final class ConceptCatalogGui implements Listener {
             meta.displayName(Component.text(concept.displayName(), NamedTextColor.LIGHT_PURPLE, TextDecoration.BOLD).decoration(TextDecoration.ITALIC, false));
 
             List<Component> lore = new ArrayList<>();
+            lore.add(Component.text("Practical concept source", NamedTextColor.LIGHT_PURPLE).decoration(TextDecoration.ITALIC, false));
+            lore.add(Component.empty());
             lore.add(Component.text("Aspects:", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false));
             concept.aspects().forEach(aspect ->
                 lore.add(Component.text("  " + aspect.displayName(), NamedTextColor.WHITE).decoration(TextDecoration.ITALIC, false))
@@ -262,6 +267,8 @@ public final class ConceptCatalogGui implements Listener {
                 lore.add(Component.text("Properties:", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false));
                 propertyLore.forEach(line -> lore.add(Component.text("  " + line, NamedTextColor.AQUA).decoration(TextDecoration.ITALIC, false)));
             }
+            lore.add(Component.empty());
+            lore.add(Component.text("Click to arm as a practical source", NamedTextColor.LIGHT_PURPLE).decoration(TextDecoration.ITALIC, false));
             meta.lore(lore);
 
             meta.getPersistentDataContainer().set(
@@ -272,6 +279,14 @@ public final class ConceptCatalogGui implements Listener {
             icon.setItemMeta(meta);
         }
         return icon;
+    }
+
+    private String requiredConceptName(String conceptKey) {
+        return plugin.conceptRegistry().allConcepts().stream()
+            .filter(concept -> concept.key().equals(conceptKey))
+            .findFirst()
+            .map(ConceptDefinition::displayName)
+            .orElse(conceptKey);
     }
 
     private String shortGraftName(ConceptGraftType type) {

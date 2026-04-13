@@ -70,6 +70,9 @@ Open the conceptual graft menu with `/graft concept`. From there, pick a concept
 
 After selecting a conceptual graft, left-click with the focus to place it. Zone laws take a center point. Beginning ↔ End fixes the first anchor at your current position and takes the second anchor on left-click. Threshold → Elsewhere takes two container anchors: source first, destination second.
 
+`/graft concept` is the rare conceptual graft menu.
+`/graft concept list` and `/graft concept <name>` are for practical concept sources used in normal grafting.
+
 Conceptual grafts are:
 - rare (one active per player by default, with a cooldown)
 - temporary (zones expire after a configurable duration)
@@ -183,7 +186,9 @@ Configured in `config.yml` under `concepts`:
 - `beginning`, `end`, `distance`, `binding`, `concealment`
 - `sky`, `nether`, `end-dimension`, `overworld`
 
-The last four (`sky`, `nether`, `end-dimension`, `overworld`) are used as concept keys by the conceptual graft system.
+The conceptual graft system also uses these concept keys:
+- `sun`, `sky`, `nether`, `end-dimension`, `overworld`
+- `concealment`, `beginning`, `distance`
 
 ## Runtime behavior
 

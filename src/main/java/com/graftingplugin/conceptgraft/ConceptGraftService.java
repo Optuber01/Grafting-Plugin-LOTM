@@ -30,6 +30,7 @@ import org.bukkit.event.entity.EntityTargetLivingEntityEvent;
 import org.bukkit.event.inventory.InventoryOpenEvent;
 import org.bukkit.event.player.PlayerBucketEmptyEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
@@ -151,6 +152,15 @@ public final class ConceptGraftService implements Listener {
             case THRESHOLD_TO_ELSEWHERE -> activateThresholdRelay(caster, type, anchorA, anchorB);
             default -> false;
         };
+    }
+
+    @EventHandler
+    public void onPlayerQuit(PlayerQuitEvent event) {
+        UUID playerId = event.getPlayer().getUniqueId();
+        playerZonePresence.remove(playerId);
+        previewFeedbackGate.clear(playerId);
+        entityTeleportCooldowns.remove(playerId);
+        feedbackCooldowns.keySet().removeIf(key -> key.startsWith(playerId + ":"));
     }
 
     @EventHandler(ignoreCancelled = true)
@@ -640,7 +650,7 @@ public final class ConceptGraftService implements Listener {
         entity.setFallDistance(0.0F);
         entity.setVelocity(velocity);
 
-        int cooldownTicks = plugin.settings().conceptGraftSettings().loopCooldownTicks();
+        int cooldownTicks = plugin.settings().conceptGraftSettings().loopTeleportCooldownTicks();
         entityTeleportCooldowns.put(entity.getUniqueId(), System.currentTimeMillis() + cooldownTicks * 50L);
 
         World world = target.getWorld();

@@ -27,6 +27,7 @@ import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.util.RayTraceResult;
@@ -98,12 +99,22 @@ public final class FocusInteractionListener implements Listener {
         player.sendMessage("§aGraft debug logging is enabled by default on this server. Use §e/graft debug§a to toggle it.");
     }
 
+    @EventHandler
+    public void onPlayerQuit(PlayerQuitEvent event) {
+        UUID playerId = event.getPlayer().getUniqueId();
+        lastRightClickTime.remove(playerId);
+        debugEnabled.remove(playerId);
+        castReentryGuard.remove(playerId);
+        plugin.castSessionManager().clear(playerId);
+        plugin.conceptCatalogGui().clearPendingAction(event.getPlayer());
+    }
+
     private void handleLeftClick(Player player, Action action, Block targetBlock, CastSession session) {
         ConceptCatalogGui.PendingConceptAction pending = plugin.conceptCatalogGui().getPendingAction(player);
         if (pending != null) {
             if (player.isSneaking() && action == Action.LEFT_CLICK_AIR) {
                 plugin.conceptCatalogGui().clearPendingAction(player);
-                player.sendMessage("\u00a78Conceptual casting cancelled.");
+                plugin.messages().send(player, "conceptual-cast-cancelled");
                 sendActionBar(player, "\u00a78Conceptual casting cancelled");
                 return;
             }
@@ -127,18 +138,18 @@ public final class FocusInteractionListener implements Listener {
             }
             if (pending.firstAnchor() == null) {
                 if (targetBlock != null && targetBlock.getType() == org.bukkit.Material.ENDER_CHEST) {
-                    player.sendMessage("§cThreshold → Elsewhere does not support ender chests.");
+                    plugin.messages().send(player, "conceptual-threshold-no-ender-chest");
                     sendActionBar(player, "§cChoose a normal container, not an ender chest");
                     return;
                 }
                 if (!(targetBlock != null && targetBlock.getState() instanceof Container)) {
-                    player.sendMessage("\u00a7cThreshold → Elsewhere needs a container as the first anchor.");
+                    plugin.messages().send(player, "conceptual-threshold-needs-container");
                     sendActionBar(player, "\u00a7cChoose a container as the source threshold");
                     return;
                 }
                 plugin.conceptCatalogGui().setPendingAction(player, pending.withFirstAnchor(targetLoc));
-                player.sendMessage("\u00a75\u00a7l\u2726 Source threshold fixed.");
-                player.sendMessage("\u00a75  Left-Click the destination container to complete the rewrite.");
+                plugin.messages().send(player, "conceptual-threshold-source-fixed");
+                plugin.messages().send(player, "conceptual-threshold-source-fixed-hint");
                 sendActionBar(player, "\u00a75Source threshold fixed \u00a78| \u00a7dchoose destination");
                 return;
             }

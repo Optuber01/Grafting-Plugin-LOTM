@@ -38,7 +38,7 @@ conceptual-graft:
   cooldown-seconds: 30
   loop-duration-seconds: 60
   loop-activation-radius: 1.5
-  loop-cooldown-ticks: 30
+  loop-teleport-cooldown-ticks: 30
   max-active-per-player: 1
 concepts:
   sun:
