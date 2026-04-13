@@ -2,6 +2,7 @@ package com.graftingplugin.focus;
 
 import com.graftingplugin.GraftingPlugin;
 import com.graftingplugin.config.PluginSettings;
+import net.kyori.adventure.text.Component;
 import org.bukkit.NamespacedKey;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -22,7 +23,7 @@ public final class FocusItemService {
     public ItemStack createFocusItem() {
         ItemStack itemStack = new ItemStack(settings.focusMaterial());
         ItemMeta meta = itemStack.getItemMeta();
-        meta.setDisplayName(stripMiniMessage(settings.focusName()));
+        meta.displayName(Component.text(stripMiniMessage(settings.focusName())));
         meta.getPersistentDataContainer().set(focusKey, PersistentDataType.STRING, MARKER);
         itemStack.setItemMeta(meta);
         return itemStack;

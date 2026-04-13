@@ -103,11 +103,13 @@ public final class DynamicPropertyEvaluator {
 
 
     private double entityMass(LivingEntity living) {
-        double maxHealth;
+        double maxHealth = 20.0;
         try {
-            maxHealth = living.getMaxHealth();
+            AttributeInstance attribute = living.getAttribute(Attribute.MAX_HEALTH);
+            if (attribute != null) {
+                maxHealth = attribute.getValue();
+            }
         } catch (Throwable ignored) {
-            maxHealth = 20.0;
         }
 
         return maxHealth / 20.0;

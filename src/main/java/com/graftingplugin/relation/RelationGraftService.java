@@ -187,11 +187,11 @@ public final class RelationGraftService implements Listener {
             event.setCancelled(true);
             int remainingAmount = cursor.getAmount() - movedAmount;
             if (remainingAmount <= 0) {
-                event.setCursor(new ItemStack(Material.AIR));
+                event.getView().setCursor(new ItemStack(Material.AIR));
             } else {
                 ItemStack remaining = cursor.clone();
                 remaining.setAmount(remainingAmount);
-                event.setCursor(remaining);
+                event.getView().setCursor(remaining);
             }
             return;
         }
@@ -249,13 +249,13 @@ public final class RelationGraftService implements Listener {
         event.setCancelled(true);
         ItemStack oldCursor = event.getOldCursor();
         if (isEmpty(oldCursor) || movedAmount >= oldCursor.getAmount()) {
-            event.setCursor(new ItemStack(Material.AIR));
+            event.getView().setCursor(new ItemStack(Material.AIR));
             return;
         }
 
         ItemStack remaining = oldCursor.clone();
         remaining.setAmount(oldCursor.getAmount() - movedAmount);
-        event.setCursor(remaining);
+        event.getView().setCursor(remaining);
     }
 
     private void finishRelationCast(Player caster, GraftAspect aspect, GraftSubject target, RelationGraftPlan plan) {

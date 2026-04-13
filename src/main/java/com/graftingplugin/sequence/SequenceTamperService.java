@@ -334,7 +334,7 @@ public final class SequenceTamperService implements Listener {
 
 
             if (aspect == GraftAspect.HEAL) {
-                livingEntity.setHealth(Math.min(livingEntity.getMaxHealth(), livingEntity.getHealth() + plugin.settings().stateTransferSettings().healAmount()));
+                livingEntity.setHealth(Math.min(maxHealth(livingEntity), livingEntity.getHealth() + plugin.settings().stateTransferSettings().healAmount()));
             }
 
 
@@ -342,6 +342,17 @@ public final class SequenceTamperService implements Listener {
                 livingEntity.addPotionEffect(new PotionEffect(spec.primaryEffect(), duration, 0, true, true, true));
             }
         }
+    }
+
+    private double maxHealth(LivingEntity livingEntity) {
+        try {
+            org.bukkit.attribute.AttributeInstance attribute = livingEntity.getAttribute(org.bukkit.attribute.Attribute.MAX_HEALTH);
+            if (attribute != null) {
+                return attribute.getValue();
+            }
+        } catch (Throwable ignored) {
+        }
+        return 20.0D;
     }
 
     private Particle payloadParticle(Set<GraftAspect> payloadAspects) {

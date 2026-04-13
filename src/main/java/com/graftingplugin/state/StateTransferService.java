@@ -505,7 +505,7 @@ public final class StateTransferService implements Listener {
         }
 
         if (aspect == GraftAspect.HEAL) {
-            livingEntity.setHealth(Math.min(livingEntity.getMaxHealth(), livingEntity.getHealth() + settings.healAmount() * mod.intensity()));
+            livingEntity.setHealth(Math.min(maxHealth(livingEntity), livingEntity.getHealth() + settings.healAmount() * mod.intensity()));
             livingEntity.addPotionEffect(new PotionEffect(PotionEffectType.ABSORPTION, duration, Math.max(0, mod.amplifier()), true, true, true));
         }
 
@@ -665,9 +665,9 @@ public final class StateTransferService implements Listener {
                 return false;
             }
             sourceLiving.setHealth(sourceLiving.getHealth() - transferred);
-            double healed = Math.min(transferred, Math.max(0.0D, target.getMaxHealth() - target.getHealth()));
+            double healed = Math.min(transferred, Math.max(0.0D, maxHealth(target) - target.getHealth()));
             if (healed > 0.0D) {
-                target.setHealth(Math.min(target.getMaxHealth(), target.getHealth() + healed));
+                target.setHealth(Math.min(maxHealth(target), target.getHealth() + healed));
             }
             double overflow = transferred - healed;
             if (overflow > 0.0D) {
@@ -823,8 +823,19 @@ public final class StateTransferService implements Listener {
             }
         }
         if (aspect == GraftAspect.HEAL) {
-            target.setHealth(Math.min(target.getMaxHealth(), target.getHealth() + settings.healAmount() * mod.intensity()));
+            target.setHealth(Math.min(maxHealth(target), target.getHealth() + settings.healAmount() * mod.intensity()));
         }
+    }
+
+    private double maxHealth(LivingEntity livingEntity) {
+        try {
+            org.bukkit.attribute.AttributeInstance attribute = livingEntity.getAttribute(org.bukkit.attribute.Attribute.MAX_HEALTH);
+            if (attribute != null) {
+                return attribute.getValue();
+            }
+        } catch (Throwable ignored) {
+        }
+        return 20.0D;
     }
 
     private void startField(Player caster, GraftSubject source, StateTransferPlan plan, Location center, String targetName) {
@@ -961,7 +972,7 @@ public final class StateTransferService implements Listener {
         }
 
         if (aspect == GraftAspect.HEAL) {
-            entity.setHealth(Math.min(entity.getMaxHealth(), entity.getHealth() + settings.healAmount() * mod.intensity()));
+            entity.setHealth(Math.min(maxHealth(entity), entity.getHealth() + settings.healAmount() * mod.intensity()));
             entity.addPotionEffect(new PotionEffect(PotionEffectType.ABSORPTION, durationTicks, Math.max(0, mod.amplifier()), true, true, true));
         }
 

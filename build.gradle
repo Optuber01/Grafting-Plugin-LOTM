@@ -28,9 +28,11 @@ tasks.withType(JavaCompile).configureEach {
     options.release = 21
 }
 
+def pluginVersion = version
+
 processResources {
     filteringCharset = 'UTF-8'
     filesMatching('plugin.yml') {
-        expand(version: project.version)
+        expand(version: pluginVersion)
     }
 }
