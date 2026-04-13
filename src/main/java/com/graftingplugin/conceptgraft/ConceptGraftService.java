@@ -53,6 +53,7 @@ public final class ConceptGraftService implements Listener {
     private final Map<UUID, Long> entityTeleportCooldowns = new ConcurrentHashMap<>();
     private final Map<String, Long> feedbackCooldowns = new ConcurrentHashMap<>();
     private final Map<UUID, Set<UUID>> playerZonePresence = new ConcurrentHashMap<>();
+    private final ConceptPreviewFeedbackGate previewFeedbackGate = new ConceptPreviewFeedbackGate(1500L);
 
     public ConceptGraftService(GraftingPlugin plugin) {
         this.plugin = plugin;
@@ -79,6 +80,7 @@ public final class ConceptGraftService implements Listener {
         entityTeleportCooldowns.clear();
         feedbackCooldowns.clear();
         playerZonePresence.clear();
+        previewFeedbackGate.clearAll();
         runtimeLedger.clearAll();
     }
 
@@ -607,6 +609,7 @@ public final class ConceptGraftService implements Listener {
         for (Player player : plugin.getServer().getOnlinePlayers()) {
             ConceptCatalogGui.PendingConceptAction pending = plugin.conceptCatalogGui().getPendingAction(player);
             if (pending == null) {
+                previewFeedbackGate.clear(player.getUniqueId());
                 continue;
             }
             previewPendingAction(player, pending);
@@ -615,19 +618,24 @@ public final class ConceptGraftService implements Listener {
 
     private void previewPendingAction(Player player, ConceptCatalogGui.PendingConceptAction pending) {
         if (!plugin.focusItemService().isFocus(player.getInventory().getItemInMainHand())) {
+            previewFeedbackGate.clear(player.getUniqueId());
             return;
         }
         if (pending.type().placementStyle() == ConceptPlacementStyle.ZONE) {
             Location previewCenter = resolvePreviewLocation(player, false);
             previewZone(player, pending.type(), previewCenter, plugin.settings().conceptGraftSettings().zoneRadius());
-            sendActionBar(player, "§5" + pending.type().displayName() + " §8| §dpreview " + formatRadius(plugin.settings().conceptGraftSettings().zoneRadius()) + "m law zone");
+            sendPreviewActionBar(player,
+                pending.type().key() + ":zone:" + previewCenter.getBlockX() + ':' + previewCenter.getBlockY() + ':' + previewCenter.getBlockZ(),
+                "§5" + pending.type().displayName() + " §8| §dpreview " + formatRadius(plugin.settings().conceptGraftSettings().zoneRadius()) + "m law zone");
             return;
         }
 
         if (pending.type().firstAnchorComesFromCaster()) {
             Location secondAnchor = resolvePreviewLocation(player, false);
             previewAnchors(player, pending.type(), pending.firstAnchor(), true, secondAnchor, true);
-            sendActionBar(player, "§5" + pending.type().displayName() + " §8| §dchoose the second anchor");
+            sendPreviewActionBar(player,
+                pending.type().key() + ":second-anchor:" + secondAnchor.getBlockX() + ':' + secondAnchor.getBlockY() + ':' + secondAnchor.getBlockZ(),
+                "§5" + pending.type().displayName() + " §8| §dchoose the second anchor");
             return;
         }
 
@@ -635,15 +643,19 @@ public final class ConceptGraftService implements Listener {
         boolean validContainer = previewAnchor.getBlock().getState() instanceof Container;
         if (pending.firstAnchor() == null) {
             previewSingleAnchor(player, pending.type(), previewAnchor, validContainer);
-            sendActionBar(player, validContainer
-                ? "§5" + pending.type().displayName() + " §8| §dchoose a source container"
-                : "§c" + pending.type().displayName() + " §8| §7target a container as the source");
+            sendPreviewActionBar(player,
+                pending.type().key() + ":source:" + validContainer + ':' + previewAnchor.getBlockX() + ':' + previewAnchor.getBlockY() + ':' + previewAnchor.getBlockZ(),
+                validContainer
+                    ? "§5" + pending.type().displayName() + " §8| §dchoose a source container"
+                    : "§c" + pending.type().displayName() + " §8| §7target a container as the source");
             return;
         }
         previewAnchors(player, pending.type(), pending.firstAnchor(), true, previewAnchor, validContainer);
-        sendActionBar(player, validContainer
-            ? "§5" + pending.type().displayName() + " §8| §dchoose the destination container"
-            : "§c" + pending.type().displayName() + " §8| §7target a container as the destination");
+        sendPreviewActionBar(player,
+            pending.type().key() + ":destination:" + validContainer + ':' + previewAnchor.getBlockX() + ':' + previewAnchor.getBlockY() + ':' + previewAnchor.getBlockZ(),
+            validContainer
+                ? "§5" + pending.type().displayName() + " §8| §dchoose the destination container"
+                : "§c" + pending.type().displayName() + " §8| §7target a container as the destination");
     }
 
     private void previewZone(Player player, ConceptGraftType type, Location center, double radius) {
@@ -1020,6 +1032,14 @@ public final class ConceptGraftService implements Listener {
         }
     }
 
+    private void sendPreviewActionBar(Player player, String previewKey, String message) {
+        long now = System.currentTimeMillis();
+        if (!previewFeedbackGate.shouldSend(player.getUniqueId(), previewKey, message, now)) {
+            return;
+        }
+        sendActionBar(player, message);
+    }
+
     private void sendThrottledActionBar(Player player, String key, String message, long cooldownMillis) {
         String fullKey = player.getUniqueId() + ":" + key;
         long now = System.currentTimeMillis();
@@ -1093,4 +1113,5 @@ public final class ConceptGraftService implements Listener {
         BukkitTask warningTask
     ) {
     }
+
 }

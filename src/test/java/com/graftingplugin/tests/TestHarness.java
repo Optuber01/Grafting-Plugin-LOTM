@@ -19,6 +19,7 @@ public final class TestHarness {
         run("ConceptGraftCatalogTest", ConceptGraftCatalogTest::run);
         run("ConceptGraftSettingsTest", ConceptGraftSettingsTest::run);
         run("ConceptGraftPresentationTest", ConceptGraftPresentationTest::run);
+        run("ConceptPreviewFeedbackGateTest", ConceptPreviewFeedbackGateTest::run);
         run("ConceptualRuntimeLedgerTest", ConceptualRuntimeLedgerTest::run);
         System.out.println("All phase-2 and conceptual-graft tests passed.");
     }

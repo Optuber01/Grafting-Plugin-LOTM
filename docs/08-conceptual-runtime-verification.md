@@ -47,7 +47,8 @@ Also define a small manual Paper smoke test for:
 8. Arm **Concealment → Recognition** around hostile mobs and confirm their target recognition toward players is cancelled while inside the zone.
 9. Run `/graft clearactive` and confirm all conceptual entries disappear from `/graft active`.
 10. Place another conceptual graft, run `/graft reload`, and confirm conceptual state is cleared cleanly.
-11. Repeat one practical graft flow and confirm it still appears under the practical section without mixing labels.
+11. For isolated scenario checks, use `/graft reload` between conceptual smoke cases so cooldowns and active-state limits do not contaminate later checks.
+12. Repeat one practical graft flow and confirm it still appears under the practical section without mixing labels.
 
 ## Acceptance criteria
 - Automated checks cover conceptual lifecycle rules, not just catalog/settings loading.
