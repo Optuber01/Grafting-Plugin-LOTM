@@ -202,12 +202,12 @@ public final class ConceptCatalogGui implements Listener {
         if (selectedType.requiresTwoAnchors()) {
             pendingActions.put(player.getUniqueId(), new PendingConceptAction(selectedType, player.getLocation().clone()));
             player.sendMessage("\u00a75\u00a7l\u2726 Beginning anchor set at your position.");
-            player.sendMessage("\u00a75  Left-Click a block to set the End anchor.");
+            player.sendMessage("\u00a75  Left-Click a block to set the End anchor and identify them as one place.");
             player.sendMessage("\u00a78  Shift+Left-Click air to cancel.");
         } else {
             pendingActions.put(player.getUniqueId(), new PendingConceptAction(selectedType, null));
-            player.sendMessage("\u00a75\u00a7l\u2726 " + selectedType.displayName() + " selected.");
-            player.sendMessage("\u00a75  Left-Click a block or the ground to graft that zone.");
+            player.sendMessage("\u00a75\u00a7l\u2726 " + selectedType.displayName() + " law selected.");
+            player.sendMessage("\u00a75  Left-Click a block or the ground to impose that law on the zone.");
             player.sendMessage("\u00a78  Shift+Left-Click air to cancel.");
         }
     }
@@ -223,9 +223,9 @@ public final class ConceptCatalogGui implements Listener {
             lore.add(Component.text(graft.description(), NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false));
             lore.add(Component.empty());
             if (graft.type().requiresTwoAnchors()) {
-                lore.add(Component.text("Requires two anchors", NamedTextColor.GOLD).decoration(TextDecoration.ITALIC, false));
+                lore.add(Component.text("Identifies two locations as one", NamedTextColor.GOLD).decoration(TextDecoration.ITALIC, false));
             } else {
-                lore.add(Component.text("Targets a zone around a location", NamedTextColor.GOLD).decoration(TextDecoration.ITALIC, false));
+                lore.add(Component.text("Imposes a law over a zone", NamedTextColor.GOLD).decoration(TextDecoration.ITALIC, false));
             }
             lore.add(Component.empty());
             lore.add(Component.text("Click to begin", NamedTextColor.LIGHT_PURPLE).decoration(TextDecoration.ITALIC, false));

@@ -88,7 +88,7 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
                 sender.sendMessage("§7  Concrete  §f-> Right-Click a block, entity, or container");
                 sender.sendMessage("§7  Concept   §f-> /graft concept <name> or /graft concept list");
                 sender.sendMessage("§7  Inventory §f-> /graft inventory opens your item picker as source");
-                sender.sendMessage("§8  /graft concept alone opens the §5Conceptual Graft§8 menu (rare, high-impact).");
+                sender.sendMessage("§8  /graft concept alone opens the §5Conceptual Graft§8 menu (rare, law imposition).");
             }
             case 2 -> {
                 sender.sendMessage("§d§lPractical Graft Workflows:");
@@ -122,7 +122,7 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
                 sender.sendMessage("§e  /graft reload §f-> Reload config");
                 sender.sendMessage("");
                 sender.sendMessage("§d§lConceptual Grafting:");
-                sender.sendMessage("§7  /graft concept §f-> Opens the §5Conceptual Graft§f menu (rare, high-impact zone effects).");
+                sender.sendMessage("§7  /graft concept §f-> Opens the §5Conceptual Graft§f menu (rare, high-impact law imposition).");
                 sender.sendMessage("§7  /graft concept list §f-> Opens the practical concept catalog.");
                 sender.sendMessage("§7  /graft concept <name> §f-> Directly selects a practical concept source.");
                 sender.sendMessage("");

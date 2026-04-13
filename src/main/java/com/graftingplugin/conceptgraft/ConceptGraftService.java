@@ -10,12 +10,15 @@ import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.block.data.Ageable;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.FallingBlock;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Monster;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.event.entity.EntityChangeBlockEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.potion.PotionEffect;
@@ -209,7 +212,22 @@ public final class ConceptGraftService implements Listener {
                 event.setCancelled(true);
                 placed.getWorld().spawnParticle(Particle.SMOKE, loc.clone().add(0.5, 0.5, 0.5), 8, 0.3, 0.3, 0.3, 0.02);
                 placed.getWorld().playSound(loc, Sound.BLOCK_FIRE_EXTINGUISH, 0.5f, 1.5f);
-                event.getPlayer().sendMessage("\u00a7cThe water evaporates instantly. Nether rules are in effect here.");
+                plugin.messages().send(event.getPlayer(), "conceptual-nether-water-rejected");
+                return;
+            }
+        }
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onEntityChangeBlock(EntityChangeBlockEvent event) {
+        if (!(event.getEntity() instanceof FallingBlock)) {
+            return;
+        }
+        Location loc = event.getBlock().getLocation();
+        for (ActiveConceptZone zone : activeZones.values()) {
+            if (zone.type() == ConceptGraftType.SKY_TO_GROUND && isInZone(loc, zone)) {
+                event.setCancelled(true);
+                event.getBlock().getWorld().spawnParticle(Particle.CLOUD, loc.clone().add(0.5, 0.5, 0.5), 6, 0.2, 0.2, 0.2, 0.02);
                 return;
             }
         }
@@ -287,6 +305,14 @@ public final class ConceptGraftService implements Listener {
                 player.setPlayerWeather(org.bukkit.WeatherType.CLEAR);
             }
         }
+
+        for (Entity entity : world.getNearbyEntities(zone.center(), r, r, r)) {
+            if (entity instanceof FallingBlock fallingBlock && isInZone(fallingBlock.getLocation(), zone)) {
+                Location fLoc = fallingBlock.getLocation();
+                world.spawnParticle(Particle.CLOUD, fLoc, 4, 0.2, 0.2, 0.2, 0.01);
+                fallingBlock.remove();
+            }
+        }
     }
 
     private void pulseNetherZone(ActiveConceptZone zone) {
@@ -332,9 +358,6 @@ public final class ConceptGraftService implements Listener {
         world.spawnParticle(Particle.REVERSE_PORTAL, zone.center().clone().add(0, 1, 0), 6, r * 0.2, 0.5, r * 0.2, 0.1);
 
         for (LivingEntity entity : world.getNearbyLivingEntities(zone.center(), r)) {
-            if (!(entity instanceof Player)) {
-                continue;
-            }
             if (Math.random() > 0.08) {
                 continue;
             }
@@ -360,6 +383,7 @@ public final class ConceptGraftService implements Listener {
 
         for (LivingEntity entity : world.getNearbyLivingEntities(zone.center(), r)) {
             entity.removePotionEffect(PotionEffectType.LEVITATION);
+            entity.removePotionEffect(PotionEffectType.SLOW_FALLING);
             entity.removePotionEffect(PotionEffectType.FIRE_RESISTANCE);
             if (entity.getFireTicks() > 0) {
                 entity.setFireTicks(0);
