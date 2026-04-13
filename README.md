@@ -27,6 +27,43 @@ Also:
 - `/graft target` opens the inventory target slot picker for item-to-item workflows. (DOESNT WORK PROPERLY)
 - `/graft clear` clears the current source and aspect but keeps the current mode.
 
+## Demonstrations
+
+- Here are some demonstrations of practical grafting:
+
+Event Graft
+
+Grafting a lever to a chest:
+![Grafting a lever to a chest](README%20Media/20260413-2117-11.6975253.gif)
+
+State Graft
+
+Grafting an effect from an entity to a block:
+![Grafting an effect from an entity to a block](README%20Media/20260413-2121-28.9203815.gif)
+
+Link Graft
+
+Grafting aggro from one entity to another:
+![Grafting aggro from one entity to another](README%20Media/20260413-2125-03.8083137.gif)
+
+Location Graft
+
+Grafting two locations together:
+![Grafting two locations together](README%20Media/20260413-2127-07.4859372.gif)
+
+- Some Conceptual Graft Examples
+
+Grafting a sky to the ground:
+![Grafting a sky to the ground](README%20Media/20260413-2059-13.2824787.gif)
+
+Grafting concealment:
+![Grafting concealment](README%20Media/20260413-2130-41.4255068.gif)
+
+Grafting the sun to the ground at night:
+![Grafting the sun to the ground at night](README%20Media/20260413-2132-11.3570609.gif)
+
+You can check the rest yourself in game.
+
 ### Available modes
 
 Practical Grafting
@@ -49,7 +86,30 @@ After selecting a conceptual graft, left-click with the focus to place it. Zone 
 `/graft concept list` and `/graft concept <name>` are for practical concept sources used in normal grafting.
 Left-click a target with the focus to cast.
 
-## Current limits/Future Improvements
+## All Commands
+
+| Command | Description | Permission |
+| --- | --- | --- |
+| `/graft help [page]` | Show controls and command help. | `grafting.use` |
+| `/graft mode <state\|link\|location\|event>` | Select the active graft mode. | `grafting.use` |
+| `/graft concept` | Open the conceptual graft menu. | `grafting.use` |
+| `/graft concept list` | Open the practical concept catalog. | `grafting.use` |
+| `/graft concept <name>` | Select a practical concept source directly. | `grafting.use` |
+| `/graft inventory` / `/graft inv` | Open the inventory source picker. | `grafting.use` |
+| `/graft target` | Open the inventory target slot picker. | `grafting.use` |
+| `/graft self` | Select yourself as the current source. | `grafting.use` |
+| `/graft aspect <aspect>` | Select an aspect directly. | `grafting.use` |
+| `/graft next` / `/graft cycle` | Cycle to the next compatible aspect. | `grafting.use` |
+| `/graft inspect` | Show the current graft setup. | `grafting.use` |
+| `/graft clear` | Clear the current source and aspect. | `grafting.use` |
+| `/graft active` | Show active runtime grafts for yourself. | `grafting.use` |
+| `/graft debug` | Toggle focus debug logging. | `grafting.use` |
+| `/graft status [player]` | Show graft status for a player. | `grafting.admin` |
+| `/graft clearactive [player]` | Clear active grafts for a player. | `grafting.admin` |
+| `/graft givefocus [player]` | Give the focus item. | `grafting.admin` |
+| `/graft reload` | Reload config and clear runtime state. | `grafting.admin` |
+
+# Current limits/Future Improvements
 
 - A lot of limitations. I would not consider this a faithful adaptation of the ability. I'd rate it a 7 at best.
 - I'd like to make the mod more free. Currently, i would say that the basic grafts are, imo, pretty in-tune with how i understand the ability, but the conceptual grafting needs a lot of work. I am unsatisfied with how it works. I am currently stopping here because this project, which was supposed to be simple and small, is kinda getting out of hand... Technical details and context below.
@@ -104,64 +164,3 @@ The tradeoff is that active graft state does not persist across restarts, and th
 ## Disclaimer
 
 This project was built with the help of LLMs, specifically Claude and Codex. The code was mostly written with AI assistance, but I took the time to understand and refactor it to make it production-ready. I wouldn't say i have read all the code lines but i can say that i understand the project architecture pretty well. I relied on them because this was my first time making a Minecraft plugin from scratch and my previous experience was limited to just forking existing projects and minimally editing them back in like 2021. I mostly work on web development and front-end design as a hobby, so this was a new territory for me. I came up with the ideas of how to approach the problem myself. I did try to use Ai for any ideas but they don't really understand LOTM so they were pretty much useless. I was also using the free/trail version of Codex so i was quite limited in my use. That is related to why the project is not as polished as i would like it to be. I learned of the application and started work on April 7th 2026 after learning of it from a friend, amd as of writing it's midnight on April 14th 2026. I'm rambling. GOod night.
-
-
-## Demonstrations
-
-- Here are some demonstrations of practical grafting:
-
-Event Graft
-
-Grafting a lever to a chest:
-![Grafting a lever to a chest](README%20Media/20260413-2117-11.6975253.gif)
-
-State Graft
-
-Grafting an effect from an entity to a block:
-![Grafting an effect from an entity to a block](README%20Media/20260413-2121-28.9203815.gif)
-
-Link Graft
-
-Grafting aggro from one entity to another:
-![Grafting aggro from one entity to another](README%20Media/20260413-2125-03.8083137.gif)
-
-Location Graft
-
-Grafting two locations together:
-![Grafting two locations together](README%20Media/20260413-2127-07.4859372.gif)
-
-- Some Conceptual Graft Examples
-
-Grafting a sky to the ground:
-![Grafting a sky to the ground](README%20Media/20260413-2059-13.2824787.gif)
-
-Grafting concealment:
-![Grafting concealment](README%20Media/20260413-2130-41.4255068.gif)
-
-Grafting the sun to the ground at night:
-![Grafting the sun to the ground at night](README%20Media/20260413-2132-11.3570609.gif)
-
-You can check the rest yourself in game.
-
-## All Commands
-
-| Command | Description | Permission |
-| --- | --- | --- |
-| `/graft help [page]` | Show controls and command help. | `grafting.use` |
-| `/graft mode <state\|link\|location\|event>` | Select the active graft mode. | `grafting.use` |
-| `/graft concept` | Open the conceptual graft menu. | `grafting.use` |
-| `/graft concept list` | Open the practical concept catalog. | `grafting.use` |
-| `/graft concept <name>` | Select a practical concept source directly. | `grafting.use` |
-| `/graft inventory` / `/graft inv` | Open the inventory source picker. | `grafting.use` |
-| `/graft target` | Open the inventory target slot picker. | `grafting.use` |
-| `/graft self` | Select yourself as the current source. | `grafting.use` |
-| `/graft aspect <aspect>` | Select an aspect directly. | `grafting.use` |
-| `/graft next` / `/graft cycle` | Cycle to the next compatible aspect. | `grafting.use` |
-| `/graft inspect` | Show the current graft setup. | `grafting.use` |
-| `/graft clear` | Clear the current source and aspect. | `grafting.use` |
-| `/graft active` | Show active runtime grafts for yourself. | `grafting.use` |
-| `/graft debug` | Toggle focus debug logging. | `grafting.use` |
-| `/graft status [player]` | Show graft status for a player. | `grafting.admin` |
-| `/graft clearactive [player]` | Clear active grafts for a player. | `grafting.admin` |
-| `/graft givefocus [player]` | Give the focus item. | `grafting.admin` |
-| `/graft reload` | Reload config and clear runtime state. | `grafting.admin` |
