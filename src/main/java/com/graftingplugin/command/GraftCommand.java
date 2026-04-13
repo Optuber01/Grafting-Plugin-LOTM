@@ -174,26 +174,14 @@ public final class GraftCommand implements CommandExecutor, TabCompleter {
             return;
         }
         if (args.length < 2) {
-            player.closeInventory();
-            plugin.getServer().getScheduler().runTask(plugin, () -> {
-                if (!player.isOnline()) {
-                    return;
-                }
-                plugin.conceptCatalogGui().openConceptualGraftMenu(player);
-                plugin.messages().send(player, "conceptual-menu-opened");
-            });
+            plugin.conceptCatalogGui().openConceptualGraftMenu(player);
+            plugin.messages().send(player, "conceptual-menu-opened");
             return;
         }
         if (args[1].equalsIgnoreCase("list")) {
             clearPendingConceptualForPractical(player);
-            player.closeInventory();
-            plugin.getServer().getScheduler().runTask(plugin, () -> {
-                if (!player.isOnline()) {
-                    return;
-                }
-                plugin.conceptCatalogGui().open(player);
-                plugin.messages().send(player, "practical-concept-catalog-opened");
-            });
+            plugin.conceptCatalogGui().open(player);
+            plugin.messages().send(player, "practical-concept-catalog-opened");
             return;
         }
         clearPendingConceptualForPractical(player);

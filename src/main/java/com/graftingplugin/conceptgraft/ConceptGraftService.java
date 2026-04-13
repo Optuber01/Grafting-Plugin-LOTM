@@ -54,6 +54,7 @@ public final class ConceptGraftService implements Listener {
     private final Map<UUID, ActiveConceptZone> activeZones = new ConcurrentHashMap<>();
     private final Map<UUID, ActiveConceptLoop> activeLoops = new ConcurrentHashMap<>();
     private final Map<UUID, ActiveThresholdRelay> activeThresholds = new ConcurrentHashMap<>();
+    private final Map<UUID, Set<Location>> overworldWaterByZone = new ConcurrentHashMap<>();
     private final Set<BukkitTask> activeTasks = ConcurrentHashMap.newKeySet();
     private final Map<UUID, Long> entityTeleportCooldowns = new ConcurrentHashMap<>();
     private final Map<String, Long> feedbackCooldowns = new ConcurrentHashMap<>();
@@ -82,6 +83,7 @@ public final class ConceptGraftService implements Listener {
             task.cancel();
         }
         activeTasks.clear();
+        overworldWaterByZone.clear();
         entityTeleportCooldowns.clear();
         feedbackCooldowns.clear();
         playerZonePresence.clear();
@@ -228,7 +230,7 @@ public final class ConceptGraftService implements Listener {
         if (event.getBucket() != Material.WATER_BUCKET) {
             return;
         }
-        Block placed = event.getBlock().getRelative(event.getBlockFace());
+        Block placed = event.getBlock();
         Location loc = placed.getLocation();
         for (ActiveConceptZone zone : activeZones.values()) {
             if (zone.type() == ConceptGraftType.NETHER_ZONE && isInZone(loc, zone)) {
@@ -241,7 +243,7 @@ public final class ConceptGraftService implements Listener {
             }
             if (zone.type() == ConceptGraftType.OVERWORLD_ZONE && isInZone(loc, zone)) {
                 event.setCancelled(true);
-                allowOverworldWater(event.getPlayer(), event.getHand(), placed);
+                allowOverworldWater(zone, event.getPlayer(), event.getHand(), placed);
                 plugin.messages().send(event.getPlayer(), "conceptual-overworld-water-allowed");
                 sendActionBar(event.getPlayer(), "§aOverworld law allows water here");
                 return;
@@ -561,17 +563,20 @@ public final class ConceptGraftService implements Listener {
         }
     }
 
-    private void allowOverworldWater(Player player, EquipmentSlot hand, Block placed) {
+    private void allowOverworldWater(ActiveConceptZone zone, Player player, EquipmentSlot hand, Block placed) {
+        Location waterLocation = placed.getLocation().toBlockLocation();
+        overworldWaterByZone.computeIfAbsent(zone.id(), ignored -> ConcurrentHashMap.newKeySet()).add(waterLocation);
         plugin.getServer().getScheduler().runTask(plugin, () -> {
-            if (!player.isOnline() || placed.getWorld() == null) {
+            if (!player.isOnline() || waterLocation.getWorld() == null) {
                 return;
             }
-            if (!placed.getType().isAir() && placed.getType() != Material.FIRE) {
+            Block targetBlock = waterLocation.getBlock();
+            if (!targetBlock.getType().isAir() && targetBlock.getType() != Material.FIRE) {
                 return;
             }
-            placed.setType(Material.WATER, false);
-            placed.getWorld().spawnParticle(Particle.HAPPY_VILLAGER, placed.getLocation().add(0.5, 0.5, 0.5), 8, 0.2, 0.2, 0.2, 0.01);
-            placed.getWorld().playSound(placed.getLocation(), Sound.ITEM_BUCKET_EMPTY, 0.7f, 1.2f);
+            targetBlock.setType(Material.WATER, false);
+            targetBlock.getWorld().spawnParticle(Particle.HAPPY_VILLAGER, targetBlock.getLocation().add(0.5, 0.5, 0.5), 8, 0.2, 0.2, 0.2, 0.01);
+            targetBlock.getWorld().playSound(targetBlock.getLocation(), Sound.ITEM_BUCKET_EMPTY, 0.7f, 1.2f);
             if (player.getGameMode() != GameMode.CREATIVE) {
                 ItemStack emptyBucket = new ItemStack(Material.BUCKET);
                 if (hand == EquipmentSlot.OFF_HAND) {
@@ -600,6 +605,43 @@ public final class ConceptGraftService implements Listener {
             if (entity instanceof Player player) {
                 player.resetPlayerTime();
                 player.resetPlayerWeather();
+            }
+        }
+        maintainOverworldWater(zone);
+    }
+
+    private void maintainOverworldWater(ActiveConceptZone zone) {
+        Set<Location> trackedWater = overworldWaterByZone.get(zone.id());
+        if (trackedWater == null || trackedWater.isEmpty()) {
+            return;
+        }
+        for (Location location : Set.copyOf(trackedWater)) {
+            if (location.getWorld() == null || !isInZone(location, zone)) {
+                trackedWater.remove(location);
+                continue;
+            }
+            Block block = location.getBlock();
+            if (block.getType().isAir() || block.getType() == Material.FIRE) {
+                block.setType(Material.WATER, false);
+            }
+        }
+        if (trackedWater.isEmpty()) {
+            overworldWaterByZone.remove(zone.id());
+        }
+    }
+
+    private void clearOverworldWater(UUID zoneId) {
+        Set<Location> trackedWater = overworldWaterByZone.remove(zoneId);
+        if (trackedWater == null || trackedWater.isEmpty()) {
+            return;
+        }
+        for (Location location : trackedWater) {
+            if (location.getWorld() == null) {
+                continue;
+            }
+            Block block = location.getBlock();
+            if (block.getType() == Material.WATER) {
+                block.setType(Material.AIR, false);
             }
         }
     }
@@ -834,6 +876,7 @@ public final class ConceptGraftService implements Listener {
         cancelTrackedTask(zone.pulseTask());
         cancelTrackedTask(zone.cleanupTask());
         cancelTrackedTask(zone.warningTask());
+        clearOverworldWater(zoneId);
         plugin.activeGraftRegistry().unregister(zoneId);
         runtimeLedger.release(zoneId);
 
