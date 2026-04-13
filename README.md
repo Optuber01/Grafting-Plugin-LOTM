@@ -21,18 +21,12 @@ A small Paper plugin that turns the Lord of the Mysteries Grafting / Reassembly 
 ./gradlew build
 ```
 
-Useful verification task:
-
-```powershell
-.\gradlew.bat testHarness
-```
-
 The plugin jar is written to `build/libs/`.
 
 ## Install
 
 1. Build the jar.
-2. Copy `build/libs/GraftingPlugin-0.1.0-SNAPSHOT.jar` into your Paper server `plugins/` folder.
+2. Copy `build/libs/GraftingPlugin-1.0.0-final.jar` into your Paper server `plugins/` folder.
 3. Start the server once to generate `config.yml` and `messages.yml`.
 4. Use `/graft givefocus` if you have admin permission, or have an admin give you the focus item.
 
